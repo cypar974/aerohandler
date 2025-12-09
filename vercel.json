@@ -1,0 +1,37 @@
+{
+    "rewrites": [
+        {
+            "source": "/",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/login",
+            "destination": "/login.html"
+        },
+        {
+            "source": "/((?!pictures|css|js|.*\\.html).*)",
+            "destination": "/app.html"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/(.*).js",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-cache"
+                }
+            ]
+        },
+        {
+            "source": "/(.*).css",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-cache"
+                }
+            ]
+        }
+    ],
+    "cleanUrls": true
+}

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroHandler | Maintenance Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/png" href="pictures/AeroHandler_logo_square_transparent.png">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0a1929 0%, #1a365d 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .instrument-panel {
+            background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+
+        h1,
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 0.05em;
+        }
+
+        /* Animated grid background similar to login.html */
+        .instrument-panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 150, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            animation: scan 20s linear infinite;
+        }
+
+        @keyframes scan {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-15px, -15px) rotate(0.5deg);
+            }
+        }
+    </style>
+    <script type="module" src="js/supabase.js"></script>
+</head>
+
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="instrument-panel cockpit-glow rounded-3xl p-8 w-full max-w-md relative z-10">
+
+        <div class="radar-scan"></div>
+
+        <div class="text-center mb-8 relative z-20">
+            <svg class="w-20 h-20 mx-auto mb-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+
+            <h1
+                class="text-2xl font-bold bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent font-orbitron mb-2">
+                SYSTEM MAINTENANCE
+            </h1>
+            <p class="text-xl text-cyan-400 font-sans tracking-wide">
+                We'll be back online shortly!
+            </p>
+        </div>
+
+        <div class="bg-gray-900/70 border border-gray-700/50 rounded-lg p-6 mb-8 relative z-20">
+            <p id="maintenance-message" class="text-gray-300 text-base">
+                Checking system status...
+            </p>
+        </div>
+
+        <div class="text-center relative z-20">
+            <p class="text-gray-500 text-sm mt-4 font-inter">
+                Attempting connection retry in <span id="countdown" class="text-cyan-400 font-bold">60</span> seconds.
+            </p>
+            <p class="text-gray-500 text-xs mt-1">
+                Do not close this window.
+            </p>
+        </div>
+
+        <div class="mt-10 pt-6 border-t border-gray-700/50 relative z-20">
+            <div class="text-center text-gray-400 text-xs space-y-2">
+                <p class="text-gray-500">AeroHandler • Maintenance Crew Working</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed inset-0 pointer-events-none">
+        <div class="absolute top-1/4 left-1/4 w-64 h-64 border border-blue-900/20 rounded-full"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 border border-cyan-900/10 rounded-full"></div>
+    </div>
+
+    <script type="module">
+        // Import supabase client from the provided file
+        import { supabase } from "./js/supabase.js";
+
+        const REFRESH_INTERVAL_MS = 60000; // 60 seconds
+        const TARGET_URL = "./app.html";
+
+        const messageElement = document.getElementById('maintenance-message');
+        const countdownElement = document.getElementById('countdown');
+
+        /**
+         * Fetches maintenance status and handles redirection.
+         */
+        async function checkMaintenanceStatus() {
+            try {
+                // Fetch the single maintenance status row
+                const { data, error } = await supabase
+                    .from('app_maintenance_status')
+                    .select('is_maintenance_mode, display_message')
+                    .eq('singleton_id', true)
+                    .single();
+
+                if (error) {
+                    console.error("Supabase Error:", error.message);
+                    messageElement.textContent = 'Could not check system status. The system is likely still down.';
+                    return;
+                }
+
+                if (data && !data.is_maintenance_mode) {
+                    // Maintenance is OVER! Redirect to the application.
+                    console.log("Maintenance complete. Redirecting to application.");
+                    window.location.href = TARGET_URL;
+                    return; // Stop further execution
+                }
+
+                // If still in maintenance, update the display message
+                if (data && data.display_message) {
+                    messageElement.textContent = data.display_message;
+                } else {
+                    messageElement.textContent = 'The system is currently undergoing scheduled maintenance. Please try again later.';
+                }
+
+                // Restart the countdown and timer
+                startCountdownAndSetInterval();
+
+            } catch (err) {
+                console.error("Fetch Error:", err);
+                messageElement.textContent = 'A network error occurred while checking status. Retrying soon.';
+                startCountdownAndSetInterval();
+            }
+        }
+
+        let countdownTimer;
+        let countdownValue = REFRESH_INTERVAL_MS / 1000;
+
+        /**
+         * Manages the 60-second countdown display.
+         */
+        function updateCountdown() {
+            countdownValue--;
+            countdownElement.textContent = countdownValue;
+            if (countdownValue <= 0) {
+                // Countdown reached zero, stop the display timer and let the interval handle the check
+                clearInterval(countdownTimer);
+            }
+        }
+
+        /**
+         * Sets the interval for checking status and starts the countdown display.
+         */
+        function startCountdownAndSetInterval() {
+            // Reset countdown value and display
+            countdownValue = REFRESH_INTERVAL_MS / 1000;
+            countdownElement.textContent = countdownValue;
+
+            // Clear any existing display timer
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+            }
+
+            // Start new display timer (updates every second)
+            countdownTimer = setInterval(updateCountdown, 1000);
+        }
+
+        // 1. Initial Check on load
+        checkMaintenanceStatus();
+
+        // 2. Set the recurring interval check (60 seconds)
+        // Note: The countdown timer is separate from the interval, but the checkMaintenanceStatus()
+        // will restart both if maintenance is still active.
+        setInterval(checkMaintenanceStatus, REFRESH_INTERVAL_MS);
+
+    </script>
+</body>
+
+</html>

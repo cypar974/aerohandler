@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroHandler | Flight School Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/png" href="pictures/AeroHandler_logo_square_transparent.png">
+
+    <style>
+        input,
+        label,
+        a,
+        .toggle-switch {
+            position: relative;
+            z-index: 10;
+        }
+
+        .instrument-panel {
+            position: relative;
+            z-index: 1;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0a1929 0%, #1a365d 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,50 Q25,45 50,50 T100,50 L100,100 L0,100 Z" fill="%23051224" opacity="0.3"/></svg>');
+            background-size: cover;
+            pointer-events: none;
+        }
+
+
+
+        .instrument-panel {
+            background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .instrument-panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 150, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            animation: scan 20s linear infinite;
+        }
+
+        @keyframes scan {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-15px, -15px) rotate(0.5deg);
+            }
+        }
+
+        .input-glow:focus {
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.5);
+        }
+
+
+        h1,
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 0.05em;
+        }
+
+        .toggle-switch {
+            width: 50px;
+            height: 26px;
+            background: #1e293b;
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid rgba(100, 200, 255, 0.2);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(24px);
+        }
+    </style>
+</head>
+
+<body class="flex items-center justify-center min-h-screen p-4">
+    <!-- Navigation Lights - Removed -->
+
+    <!-- Login Panel -->
+    <div class="instrument-panel cockpit-glow rounded-3xl p-8 w-full max-w-md relative z-10">
+        <!-- Runway Lights -->
+        <div class="runway"></div>
+        <!-- Header with logo on top -->
+        <div class="text-center mb-8">
+            <div class="flex flex-col items-center justify-center gap-3 mb-6">
+                <!-- Logo on top -->
+                <div class="relative">
+                    <div class="absolute -inset-4 bg-blue-500/10 rounded-full blur-lg"></div>
+                    <img src="pictures/AeroHandler_logo.png" alt="AeroHandler Logo" class="h-20 relative">
+                </div>
+                <!-- Name is below -->
+                <h1
+                    class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent font-orbitron">
+                    FLIGHT <span class="text-white"> DECK</span>
+                </h1>
+            </div>
+            <!-- Removed "Flight Training Management System" text -->
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="space-y-6">
+            <div>
+                <label class="block text-cyan-300 text-sm font-medium mb-2 font-sans">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        EMAIL
+                    </span>
+                </label>
+                <input type="email" id="email" autocomplete="username" placeholder="pilot@aerohandler.com" required
+                    class="w-full px-4 py-3 border border-gray-700 rounded-xl bg-gray-900/80 text-white placeholder-gray-500 focus:outline-none input-glow transition-all duration-300 font-sans text-sm cursor-text">
+            </div>
+
+            <div>
+                <label class="block text-cyan-300 text-sm font-medium mb-2 font-sans">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        PASSWORD
+                    </span>
+                </label>
+                <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" required
+                    class="w-full px-4 py-3 border border-gray-700 rounded-xl bg-gray-900/80 text-white placeholder-gray-500 focus:outline-none input-glow transition-all duration-300 font-orbitron tracking-widest cursor-text">
+            </div>
+
+            <!-- Remember Me Toggle -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="remember-toggle" class="toggle-switch"></div>
+                    <span class="text-gray-300 text-sm">Remember credentials</span>
+                </div>
+                <a href="forgot-password.html"
+                    class="text-cyan-400 hover:text-cyan-300 text-sm transition-colors hover:underline cursor-pointer">
+                    Forgot Password
+                </a>
+            </div>
+
+            <!-- Login Button -->
+            <button type="submit"
+                class="w-full bg-gradient-to-r from-cyan-600 to-blue-700 text-white py-3 rounded-xl hover:from-cyan-700 hover:to-blue-800 transition-all duration-300 font-sans tracking-wider text-lg relative group overflow-hidden cursor-pointer">
+                <span class="relative z-10">LOG IN</span>
+                <div
+                    class="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                </div>
+                <div
+                    class="absolute top-0 left-0 w-4 h-full bg-white/30 transform -skew-x-12 group-hover:translate-x-96 transition-transform duration-700">
+                </div>
+            </button>
+        </form>
+
+        <!-- Error Message -->
+        <p id="error-msg"
+            class="text-red-400 text-center mt-4 p-3 rounded-lg bg-red-900/20 border border-red-800/30 hidden font-sans text-sm">
+        </p>
+
+        <!-- Footer -->
+        <div class="mt-8 pt-6 border-t border-gray-700/50">
+            <div class="text-center text-gray-400 text-xs space-y-2">
+                <p class="flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Secure Flight Training Platform
+                </p>
+                <p class="text-gray-500">Authorized Access Only • All Activities Logged</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Elements -->
+    <div class="fixed inset-0 pointer-events-none">
+        <div class="absolute top-1/4 left-1/4 w-64 h-64 border border-blue-900/20 rounded-full"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 border border-cyan-900/10 rounded-full"></div>
+    </div>
+
+    <script type="module" src="js/auth.js"></script>
+
+    <script>
+        // 1. Elements
+        const toggle = document.getElementById('remember-toggle');
+        const emailInput = document.getElementById('email');
+        const loginForm = document.getElementById('login-form');
+
+        // 2. Load Saved Email on Page Load
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedEmail = localStorage.getItem('aero_saved_email');
+            const isRemembered = localStorage.getItem('aero_remember_active') === 'true';
+
+            if (isRemembered && savedEmail) {
+                emailInput.value = savedEmail;
+                toggle.classList.add('active');
+            }
+        });
+
+        // 3. Toggle Switch Logic
+        toggle.addEventListener('click', function () {
+            this.classList.toggle('active');
+        });
+
+        // 4. Handle Login & Saving
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            // --- SAVE CREDENTIALS LOGIC ---
+            const isActive = toggle.classList.contains('active');
+
+            if (isActive) {
+                // Save email and the "active" state
+                localStorage.setItem('aero_saved_email', emailInput.value);
+                localStorage.setItem('aero_remember_active', 'true');
+            } else {
+                // Clear if the user turned it off
+                localStorage.removeItem('aero_saved_email');
+                localStorage.removeItem('aero_remember_active');
+            }
+            // -----------------------------
+
+            // Existing Animation Logic
+            const btn = document.querySelector('button[type="submit"]');
+            const originalContent = btn.innerHTML; // Save original text
+
+            btn.innerHTML = '<span class="relative z-10">NAVIGATING...</span>';
+            btn.classList.add('from-gray-600', 'to-gray-700');
+
+            // Simulate API delay (Replace this with your real auth.js logic)
+            setTimeout(() => {
+                btn.innerHTML = originalContent;
+                btn.classList.remove('from-gray-600', 'to-gray-700');
+
+                // For testing: Redirect or show success
+                console.log("Login submitted with:", emailInput.value);
+            }, 2000);
+        });
+
+        // Make inputs clickable (Your existing fix)
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('mousedown', (e) => e.stopPropagation());
+            input.addEventListener('click', (e) => {
+                e.stopPropagation();
+                input.focus();
+            });
+            input.addEventListener('focus', () => input.classList.add('ring-2', 'ring-cyan-500/50'));
+            input.addEventListener('blur', () => input.classList.remove('ring-2', 'ring-cyan-500/50'));
+        });
+    </script>
+</body>
+
+</html>

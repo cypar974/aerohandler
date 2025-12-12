@@ -1,5 +1,8 @@
 # AeroHandler - Flight Deck
 
+Email: cyprienarmand@gmail.com
+Psw: c
+
 ## Overview
 
 AeroClub (AeroHandler) is an integrated web application aimed at managing all aspects of a flight school or aero club. Built for modern flight operations, the platform supports student, instructor, aircraft, bookings, and financial management, all through a responsive, intuitive UI.

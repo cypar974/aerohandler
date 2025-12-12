@@ -1,7 +1,7 @@
 # AeroHandler - Flight Deck
 
-Email: cyprienarmand@gmail.com
-Psw: c
+- Email: cyprienarmand@gmail.com
+- Psw: c
 
 ## Overview
 

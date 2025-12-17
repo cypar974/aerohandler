@@ -5,7 +5,7 @@
 
 ## Overview
 
-AeroClub (AeroHandler) is an integrated web application aimed at managing all aspects of a flight school or aero club. Built for modern flight operations, the platform supports student, instructor, aircraft, bookings, and financial management, all through a responsive, intuitive UI.
+AeroClub (AeroHandler) is an integrated web application aimed at managing all aspects of a flight school or aero club. Built for handling flight operations, the platform supports student, instructor, aircraft, bookings, and financial management, all through a responsive, intuitive UI.
 
 ---
 
@@ -23,8 +23,8 @@ AeroClub (AeroHandler) is an integrated web application aimed at managing all as
 - **Settings/Customization**: In-app preferences for school settings, themes, notification preferences, flight & billing
 - **Data Export & Backup**: Backup/download CSV (schedules, logs), manage data integrity easily
 - **Security**: RLS on DB, access control, Supabase keys stored securely, session-based role enforcement
-- **Responsive UI**: TailwindCSS, mobile-friendly
-- **Modular/Extensible**: JS components/pages/modals for easy feature scaling
+- **Responsive UI**: TailwindCSS, (mobile-friendly to come)
+- **Modular/Extensible**: JS components/pages/modals for easy feature scaling (React implementation to come)
 
 ---
 
@@ -69,24 +69,6 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 - **Settings**: Global preferences, school config, billing, security, and appearance
 - **Security**: Managed via Supabase session and DB RLS; logout fully clears session
 
----
-
-## Setup & Deployment
-
-1. **Clone repository**
-2. **Install or host statically**: No server is required for the front-end—can serve `app.html` via any static server
-3. **Supabase setup**:
-    - Register DB/project on [Supabase.io](https://supabase.io)
-    - Add keys to `js/supabase.js` (see current keys, set yours in production!)
-    - Run SQL in `/sql/full_sql.sql` to initialize schema
-    - Add seed/example data via `/sql/seed/`, `/sql/other/` if needed
-4. **Environment**:
-    - Keys/secrets must go in `js/supabase.js` (or load via env process in your deployment pipeline)
-    - Confirm DB URL and ANON KEY for production use
-5. **Open `app.html` in your browser to start!**
-
----
-
 ## Customization & Extending
 
 - **Add Pages/Features**: Create new JS files in `js/pages/`, reference in route map in `main.js`
@@ -107,11 +89,9 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 
 ## 🔒 Security Note: Database Schema
 
-**Important:** For security compliance and to prevent the accidental exposure of sensitive configuration data, the `/sql/` directory referenced in this documentation is **not included** in the public repository.
+**Important:** For security reasons and to prevent the accidental exposure of sensitive configuration data, the `/sql/` directory referenced in this documentation is a skeleton of the real SQL file.
 
 * **Exclusion**: All SQL schemas, seed data, and migration scripts are strictly version-controlled in a private environment and excluded via `.gitignore`.
-* **Setup**: If you are an authorized developer or administrator requiring database initialization scripts (e.g., `full_sql.sql`), please contact the repository owner or consult the internal secure documentation.
-* **Credentials**: Never commit files containing real API keys or production database connection strings.
 
 ---
 

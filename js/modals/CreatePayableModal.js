@@ -1,13 +1,13 @@
-// ./modals/CreateInvoiceModal.js
+// ./modals/CreatePayableModal.js
 import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
 import { showToast } from "../components/showToast.js";
 
-export class CreateInvoiceModal {
+export class CreatePayableModal {
     constructor() {
-        this.modalId = 'invoice-modal';
-        this.peopleData = [];
+        this.modalId = 'payable-modal';
+        this.peopleData = []; // Stores raw data from view
         this.onCloseCallback = null;
         this.datePicker = null;
         this.autocompleteInstance = null;
@@ -30,9 +30,9 @@ export class CreateInvoiceModal {
         return this.initPromise;
     }
 
+    // Fetches raw data using the same secure RPC as the Invoice modal
     async loadPeople() {
         try {
-            // Loads ID, Name, Type from the view (Email is missing here in SQL)
             const { data, error } = await supabase.schema('api').rpc('get_members');
 
             if (error) throw error;
@@ -40,7 +40,7 @@ export class CreateInvoiceModal {
             this.peopleData = data || [];
 
         } catch (error) {
-            console.error('Error loading people from view:', error);
+            console.error('Error loading people for payables:', error);
             this.peopleData = [];
         }
     }
@@ -48,9 +48,11 @@ export class CreateInvoiceModal {
     render() {
         if (document.getElementById(this.modalId)) return;
 
-        const canCreateInvoice = true;
+        // --- DEMO MODE: PERMISSIONS FLAG ---
+        const canCreatePayable = true;
+        // -----------------------------------
 
-        // Icons
+        // Icons for UI
         const iconUser = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`;
         const iconDollar = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
         const iconDesc = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>`;
@@ -62,8 +64,8 @@ export class CreateInvoiceModal {
                 
                 <div class="flex justify-between items-center p-6 border-b border-gray-800 bg-gray-900/50 rounded-t-2xl">
                     <div>
-                        <h2 class="text-2xl font-bold text-white tracking-tight">Create Invoice</h2>
-                        <p class="text-sm text-gray-400 mt-1">Generate a new invoice for a member.</p>
+                        <h2 class="text-2xl font-bold text-white tracking-tight">Create Payable (Bill)</h2>
+                        <p class="text-sm text-gray-400 mt-1">Record a payment owed to a vendor or instructor.</p>
                     </div>
                     <button type="button" class="text-gray-400 hover:text-white transition-colors focus:outline-none" onclick="document.getElementById('${this.modalId}').classList.add('hidden')">
                         ${iconClose}
@@ -71,44 +73,44 @@ export class CreateInvoiceModal {
                 </div>
 
                 <div class="p-6 overflow-y-auto custom-scrollbar">
-                    <form id="invoice-form" class="space-y-6">
+                    <form id="payable-form" class="space-y-6">
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-300">Member</label>
+                                <label class="block text-sm font-medium text-gray-300">Payee</label>
                                 <div class="relative">
                                     ${iconUser}
-                                    <input type="text" id="invoice-person" 
-                                        class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none" 
-                                        placeholder="Search by name..." autocomplete="off">
-                                    <input type="hidden" id="invoice-person-id">
-                                    <input type="hidden" id="invoice-person-type">
+                                    <input type="text" id="payable-person" 
+                                        class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none" 
+                                        placeholder="Type name (e.g. Instructor)..." autocomplete="off">
+                                    <input type="hidden" id="payable-person-id">
+                                    <input type="hidden" id="payable-person-type">
                                 </div>
                             </div>
 
                             <div class="space-y-2">
                                 <label class="block text-sm font-medium text-gray-300">Due Date</label>
                                 <div class="relative">
-                                    <input type="date" id="invoice-due-date" 
-                                        class="w-full pl-4 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none" 
+                                    <input type="date" id="payable-due-date" 
+                                        class="w-full pl-4 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none" 
                                         required>
                                 </div>
                             </div>
                         </div>
                         
-                        <div id="person-details" class="hidden animate-fade-in-down">
+                        <div id="payable-person-details" class="hidden animate-fade-in-down">
                             <div class="flex items-center p-4 bg-gray-800/50 border border-gray-700/50 rounded-lg">
-                                <div class="flex-shrink-0 h-10 w-10 rounded-full bg-blue-900/30 flex items-center justify-center text-blue-400 border border-blue-500/20">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                                <div class="flex-shrink-0 h-10 w-10 rounded-full bg-red-900/30 flex items-center justify-center text-red-400 border border-red-500/20">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
                                 </div>
                                 <div class="ml-4 grid grid-cols-2 gap-x-8 w-full">
                                     <div>
                                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</p>
-                                        <p id="person-type" class="text-sm font-semibold text-white mt-0.5">Unknown</p>
+                                        <p id="payable-details-type" class="text-sm font-semibold text-white mt-0.5">Unknown</p>
                                     </div>
                                     <div>
                                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Email</p>
-                                        <p id="person-email" class="text-sm text-gray-300 mt-0.5 truncate">Loading...</p>
+                                        <p id="payable-details-email" class="text-sm text-gray-300 mt-0.5 truncate">Loading...</p>
                                     </div>
                                 </div>
                             </div>
@@ -118,9 +120,9 @@ export class CreateInvoiceModal {
                             <label class="block text-sm font-medium text-gray-300">Description</label>
                             <div class="relative">
                                 ${iconDesc}
-                                <input type="text" id="invoice-description" 
-                                    class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none" 
-                                    placeholder="e.g. Flight Instruction - 2 Hours" required>
+                                <input type="text" id="payable-description" 
+                                    class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none" 
+                                    placeholder="e.g. Flight Instruction Services" required>
                             </div>
                         </div>
                         
@@ -128,8 +130,8 @@ export class CreateInvoiceModal {
                             <label class="block text-sm font-medium text-gray-300">Amount</label>
                             <div class="relative">
                                 ${iconDollar}
-                                <input type="number" id="invoice-amount" 
-                                    class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none" 
+                                <input type="number" id="payable-amount" 
+                                    class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none" 
                                     placeholder="0.00" step="0.01" min="0" required>
                             </div>
                         </div>
@@ -139,16 +141,16 @@ export class CreateInvoiceModal {
 
                 <div class="p-6 border-t border-gray-800 bg-gray-900/50 rounded-b-2xl flex justify-between items-center">
                     <div class="flex flex-col">
-                        <span class="text-xs text-gray-400 uppercase font-semibold tracking-wider">Total Amount</span>
-                        <div class="text-2xl font-bold text-white font-mono tracking-tight">$<span id="invoice-total">0.00</span></div>
+                        <span class="text-xs text-gray-400 uppercase font-semibold tracking-wider">Total Payable</span>
+                        <div class="text-2xl font-bold text-white font-mono tracking-tight">$<span id="payable-total">0.00</span></div>
                     </div>
                     <div class="flex space-x-3">
-                        <button type="button" id="cancel-invoice" class="px-5 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-medium transition-all duration-200 focus:ring-2 focus:ring-gray-600">
+                        <button type="button" id="cancel-payable" class="px-5 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-medium transition-all duration-200 focus:ring-2 focus:ring-gray-600">
                             Cancel
                         </button>
-                        ${canCreateInvoice ? `
-                        <button type="submit" form="invoice-form" class="px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium shadow-lg shadow-green-900/30 transition-all duration-200 transform hover:-translate-y-0.5 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900">
-                            Create Invoice
+                        ${canCreatePayable ? `
+                        <button type="submit" form="payable-form" class="px-6 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg shadow-red-900/30 transition-all duration-200 transform hover:-translate-y-0.5 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900">
+                            Create Payable
                         </button>` : ''}
                     </div>
                 </div>
@@ -170,17 +172,20 @@ export class CreateInvoiceModal {
 
     setupEventListeners() {
         if (!this.listenersSetup) {
-            document.getElementById('cancel-invoice')?.addEventListener('click', () => this.hide());
-            document.getElementById('invoice-form')?.addEventListener('submit', (e) => this.handleSubmit(e));
-            document.getElementById('invoice-amount')?.addEventListener('input', () => this.updateInvoiceTotal());
+            document.getElementById('cancel-payable')?.addEventListener('click', () => this.hide());
+            document.getElementById('payable-form')?.addEventListener('submit', (e) => this.handleSubmit(e));
 
-            document.getElementById('invoice-person')?.addEventListener('input', (e) => {
+            document.getElementById('payable-amount')?.addEventListener('input', () => this.updateTotal());
+
+            // Clear details if input is cleared manually
+            document.getElementById('payable-person')?.addEventListener('input', (e) => {
                 if (!e.target.value.trim()) {
                     this.hidePersonDetails();
-                    document.getElementById('invoice-person-type').value = '';
+                    document.getElementById('payable-person-type').value = '';
                 }
             });
 
+            // Close on Escape or Click Outside
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') this.hide();
             });
@@ -198,7 +203,7 @@ export class CreateInvoiceModal {
 
     initializeDatePicker() {
         if (!this.datePicker) {
-            const dueDateInput = document.getElementById('invoice-due-date');
+            const dueDateInput = document.getElementById('payable-due-date');
             if (dueDateInput) {
                 this.datePicker = new CustomDatePicker(dueDateInput);
             }
@@ -208,24 +213,22 @@ export class CreateInvoiceModal {
     initializeAutocomplete() {
         if (!this.autocompleteInstance) {
             this.autocompleteInstance = setupPersonAutocomplete({
-                inputId: 'invoice-person',
-                hiddenId: 'invoice-person-id',
+                inputId: 'payable-person',
+                hiddenId: 'payable-person-id',
                 peopleData: this.peopleData,
                 roleFilter: 'all',
                 onSelect: async (selected) => {
                     // 1. Get the local person object to ensure we have the 'type'
-                    // The SQL view definitely returns 'type', so we look it up here.
                     const fullPerson = this.peopleData.find(p => p.id === selected.id) || selected;
 
-                    // 2. Set the type immediately (Solves "Role: Unknown")
+                    // 2. Set the type immediately
                     const type = fullPerson.type || 'other_person';
-                    document.getElementById('invoice-person-type').value = type;
+                    document.getElementById('payable-person-type').value = type;
 
-                    // 3. Update UI immediately with what we have (Role yes, Email pending)
+                    // 3. Update UI immediately with what we have
                     this.showPersonDetails(fullPerson, 'Loading email...');
 
-                    // 4. Fetch the email asynchronously since SQL view get_members doesn't have it.
-                    // We must query specific RPCs based on type to get the full profile.
+                    // 4. Fetch the email asynchronously to be safe
                     const email = await this.fetchPersonEmail(fullPerson.id, type);
 
                     // 5. Update UI again with the email
@@ -236,8 +239,7 @@ export class CreateInvoiceModal {
     }
 
     /**
-     * Since 'get_members' view in SQL does NOT include email, we must fetch it 
-     * using the specific secure RPCs for each table.
+     * Identical email fetch logic as CreateInvoiceModal to ensure robustness
      */
     async fetchPersonEmail(id, type) {
         try {
@@ -250,7 +252,7 @@ export class CreateInvoiceModal {
                 case 'instructor':
                     rpcName = 'get_instructor_by_id'; paramName = 'instructor_uuid'; break;
                 case 'regular_pilot':
-                    rpcName = 'get_regular_pilot_by_id'; paramName = 'pilot_uuid'; break; // Note: SQL param might vary, checking standard
+                    rpcName = 'get_regular_pilot_by_id'; paramName = 'pilot_uuid'; break;
                 case 'maintenance_technician':
                     rpcName = 'get_maintenance_technician_by_id'; paramName = 'technician_uuid'; break;
                 case 'other_person':
@@ -258,19 +260,12 @@ export class CreateInvoiceModal {
                 default: return 'No email available';
             }
 
-            // Correction for regular_pilot param name based on standard patterns or just try generic
-            // Looking at SQL provided: get_regular_pilot_by_id(pilot_uuid UUID)
-            // get_instructor_by_id(instructor_uuid UUID)
-            // get_student_by_id(student_uuid UUID)
-
             const params = {};
             params[paramName] = id;
 
             const { data, error } = await supabase.schema('api').rpc(rpcName, params);
 
             if (error || !data || data.length === 0) return 'No email found';
-
-            // RPCs return a SETOF (array), get first item
             return data[0].email;
 
         } catch (e) {
@@ -280,18 +275,16 @@ export class CreateInvoiceModal {
     }
 
     showPersonDetails(person, emailOverride = null) {
-        const detailsContainer = document.getElementById('person-details');
-        const typeElement = document.getElementById('person-type');
-        const emailElement = document.getElementById('person-email');
+        const detailsContainer = document.getElementById('payable-person-details');
+        const typeElement = document.getElementById('payable-details-type');
+        const emailElement = document.getElementById('payable-details-email');
 
         if (detailsContainer && typeElement && emailElement) {
-            // FIX: Ensure we read the 'type' property from the SQL view data
             const typeRaw = person.type || '';
             const typeDisplay = typeRaw ? typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1).replace('_', ' ') : 'Unknown';
 
             typeElement.textContent = typeDisplay;
 
-            // Use override if provided (lazy load result), otherwise fallback
             if (emailOverride) {
                 emailElement.textContent = emailOverride;
             } else {
@@ -303,12 +296,12 @@ export class CreateInvoiceModal {
     }
 
     hidePersonDetails() {
-        document.getElementById('person-details')?.classList.add('hidden');
+        document.getElementById('payable-person-details')?.classList.add('hidden');
     }
 
-    updateInvoiceTotal() {
-        const amount = parseFloat(document.getElementById('invoice-amount').value) || 0;
-        document.getElementById('invoice-total').textContent = amount.toFixed(2);
+    updateTotal() {
+        const amount = parseFloat(document.getElementById('payable-amount').value) || 0;
+        document.getElementById('payable-total').textContent = amount.toFixed(2);
     }
 
     async show(params = {}) {
@@ -319,21 +312,23 @@ export class CreateInvoiceModal {
         const modal = document.getElementById(this.modalId);
         if (!modal) return;
 
-        document.getElementById('invoice-form').reset();
+        // Reset Form
+        document.getElementById('payable-form').reset();
         this.hidePersonDetails();
-        document.getElementById('invoice-person-id').value = '';
-        document.getElementById('invoice-person-type').value = '';
+        document.getElementById('payable-person-id').value = '';
+        document.getElementById('payable-person-type').value = '';
 
-        if (params.personId && params.personType) {
-            this.prefillPerson(params.personId);
-        } else if (params.studentId) {
-            this.prefillPerson(params.studentId);
-        }
-
+        // Default to today + 30 days
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 30);
-        document.getElementById('invoice-due-date').value = dueDate.toISOString().split('T')[0];
-        document.getElementById('invoice-total').textContent = '0.00';
+        document.getElementById('payable-due-date').value = dueDate.toISOString().split('T')[0];
+        document.getElementById('payable-total').textContent = '0.00';
+
+        // Handle Prefills (e.g., creating a payable from an Instructor profile)
+        if (params.personId) {
+            this.prefillPerson(params.personId);
+        }
+
         this.datePicker?.updateDisplay();
         modal.classList.remove('hidden');
     }
@@ -342,6 +337,7 @@ export class CreateInvoiceModal {
         try {
             let person = this.peopleData.find(p => p.id === personId);
 
+            // Fetch if missing
             if (!person) {
                 const { data, error } = await supabase.schema('api').rpc('get_members');
                 if (!error && data) {
@@ -352,7 +348,7 @@ export class CreateInvoiceModal {
                             this.peopleData.map(p => ({
                                 id: p.id,
                                 name: `${p.first_name} ${p.last_name}`,
-                                type: p.type // ensure type is passed to autocomplete
+                                type: p.type
                             }))
                         );
                     }
@@ -361,11 +357,11 @@ export class CreateInvoiceModal {
 
             if (person) {
                 const name = `${person.first_name} ${person.last_name}`;
-                document.getElementById('invoice-person').value = name;
-                document.getElementById('invoice-person-id').value = person.id;
-                document.getElementById('invoice-person-type').value = person.type;
+                document.getElementById('payable-person').value = name;
+                document.getElementById('payable-person-id').value = person.id;
+                document.getElementById('payable-person-type').value = person.type;
 
-                // Trigger the email fetch manually for prefill
+                // Trigger robust email fetch
                 this.showPersonDetails(person, 'Loading email...');
                 const email = await this.fetchPersonEmail(person.id, person.type);
                 this.showPersonDetails(person, email);
@@ -393,59 +389,59 @@ export class CreateInvoiceModal {
 
     async handleSubmit(e) {
         e.preventDefault();
-        const personId = document.getElementById('invoice-person-id').value;
-        const personType = document.getElementById('invoice-person-type').value;
-        const dueDate = document.getElementById('invoice-due-date').value;
-        const description = document.getElementById('invoice-description').value;
-        const amount = parseFloat(document.getElementById('invoice-amount').value);
 
-        if (!personId || !personType) {
-            showToast('Please select a student or instructor', 'error');
+        const personId = document.getElementById('payable-person-id').value;
+        const personType = document.getElementById('payable-person-type').value;
+        const dueDate = document.getElementById('payable-due-date').value;
+        const description = document.getElementById('payable-description').value;
+        const amount = parseFloat(document.getElementById('payable-amount').value);
+
+        if (!personId) {
+            showToast('Please select a payee', 'error');
             return;
         }
+
         if (!description.trim()) {
-            showToast('Please enter an invoice description', 'error');
-            return;
-        }
-        if (amount <= 0) {
-            showToast('Please enter a valid amount greater than 0', 'error');
+            showToast('Please enter a description', 'error');
             return;
         }
 
-        const invoiceNumber = 'INV-' + Date.now();
-        const finalDescription = description || `Invoice ${invoiceNumber}`;
+        if (amount <= 0) {
+            showToast('Amount must be greater than 0', 'error');
+            return;
+        }
 
         try {
-            await this.createFinancialTransaction(personId, personType, dueDate, finalDescription, amount);
+            await this.createFinancialTransaction(personId, personType, dueDate, description, amount);
+
             this.hide();
-            document.dispatchEvent(new CustomEvent('invoiceCreated', {
+
+            // Notify parent components to refresh lists
+            document.dispatchEvent(new CustomEvent('payableCreated', {
                 detail: {
-                    invoice: { invoice_number: invoiceNumber, total_amount: amount },
+                    amount: amount,
                     personId,
-                    personType
+                    description
                 }
             }));
-            showToast('Invoice created successfully!', 'success');
+
+            showToast('Payable created successfully!', 'success');
+
         } catch (error) {
-            console.error('Error creating invoice:', error);
-            showToast('Error creating invoice: ' + error.message, 'error');
+            console.error('Error creating payable:', error);
+            showToast('Error creating payable: ' + error.message, 'error');
         }
     }
 
     async createFinancialTransaction(personId, personType, dueDate, description, amount) {
-        let direction;
-        let type;
+        // --- LOGIC DIFFERENCE FROM INVOICE MODAL ---
+        // For this modal, the direction is ALWAYS 'payable' (Club pays out)
+        const direction = 'payable';
 
-        if (personType === 'student') {
-            direction = 'receivable';
-            type = 'other';
-        } else if (personType === 'instructor') {
-            direction = 'payable';
-            type = 'instructor';
-        } else {
-            direction = 'payable';
-            type = 'other';
-        }
+        // Infer transaction type based on role
+        let type = 'other';
+        if (personType === 'instructor') type = 'instructor';
+        if (personType === 'maintenance_technician') type = 'maintenance';
 
         const payload = {
             transaction_direction: direction,
@@ -454,10 +450,11 @@ export class CreateInvoiceModal {
             amount: amount,
             due_date: dueDate,
             description: description,
-            status: 'pending'
+            status: 'pending' // Default status
         };
 
         const { data, error } = await supabase.schema('api').rpc('insert_financial_transaction', { payload });
+
         if (error) throw error;
         return data;
     }

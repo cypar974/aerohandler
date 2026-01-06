@@ -1,16 +1,41 @@
 // ./js/pages/planes.js
 import { supabase } from "../supabase.js";
+import { setupPersonAutocomplete } from "../components/autocomplete.js";
+import { showToast } from "../components/showToast.js";
+import { getMembers } from "../utils/memberData.js";
+import { MaintenanceHistoryModal } from "../modals/MaintenanceHistoryModal.js";
+import { FuelOilModal } from "../modals/FuelOilModal.js";
+import { loadFuelHistoryPage } from "./fuelHistory.js";
+import { loadOilHistoryPage } from "./oilHistory.js";
 
 let planesData = [];
+// Cache for plane models to map ID -> Name
+let planeModelsCache = [];
+// Cache for members (pilots/instructors) for autocomplete
+let membersCache = [];
+
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "tail_number", query: "" };
 
 // Pagination
 let currentPage = 1;
 const rowsPerPage = 10;
+const fuelModal = new FuelOilModal();
 
+const maintenanceModal = new MaintenanceHistoryModal();
+
+// --- PERMISSIONS (Permissive Demo Mode) ---
+const permissions = {
+    canAdd: true,
+    canEdit: true,
+    canDelete: true,
+    canManageMaintenance: true
+};
 
 export async function loadPlanesPage() {
+    // Pre-fetch plane models for the cache and the add-modal
+    await fetchPlaneModels();
+
     document.getElementById("main-content").innerHTML = `
         
     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
@@ -18,6 +43,16 @@ export async function loadPlanesPage() {
             <h1 class="text-3xl font-bold text-white mb-2">Planes Management</h1>
             <p class="text-gray-400">Manage aircraft fleet, status, and scheduling</p>
         </div>
+                <div class="flex gap-2">
+            <button id="global-fuel-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-orange-200 border border-gray-600 rounded-lg transition-all flex items-center gap-2 text-sm font-medium">
+                <span class="text-lg">⛽</span> Fuel Logs
+            </button>
+            <button id="global-oil-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-yellow-200 border border-gray-600 rounded-lg transition-all flex items-center gap-2 text-sm font-medium">
+                <span class="text-lg">💧</span> Oil Logs
+            </button>
+        </div>
+
+        <div class="h-6 w-px bg-gray-600 hidden sm:block"></div>
         <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div class="flex gap-2">
                 <select id="search-column" class="p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
@@ -34,16 +69,17 @@ export async function loadPlanesPage() {
                     </div>
                 </div>
             </div>
+            ${permissions.canAdd ? `
             <button id="add-plane-btn" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-500 hover:to-blue-600 transition-all duration-200 font-medium flex items-center gap-2 justify-center">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
                 Add Plane
             </button>
+            ` : ''}
         </div>
     </div>
 
-    <!-- Table Container -->
     <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-white">
@@ -85,22 +121,22 @@ export async function loadPlanesPage() {
             </table>
         </div>
         
-        <!-- Loading State -->
         <div id="loading-state" class="hidden p-8 text-center">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
             <p class="text-gray-400 mt-4">Loading planes...</p>
         </div>
 
-        <!-- Empty State -->
         <div id="empty-state" class="hidden p-8 text-center">
             <svg class="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
             </svg>
             <h3 class="text-lg font-medium text-gray-300 mb-2">No planes found</h3>
             <p class="text-gray-500 mb-4">Get started by adding your first aircraft</p>
+            ${permissions.canAdd ? `
             <button id="empty-add-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors">
                 Add Plane
             </button>
+            ` : ''}
         </div>
     </div>
 
@@ -108,7 +144,7 @@ export async function loadPlanesPage() {
 
     `;
 
-    // ADD THIS MODAL HTML RIGHT HERE, before the event listeners
+    // Inject "Add Plane" Modal
     document.body.insertAdjacentHTML('beforeend', `
         <div id="plane-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
             <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -128,17 +164,42 @@ export async function loadPlanesPage() {
                                 <label class="block text-sm font-medium text-gray-300 mb-1">Tail Number *</label>
                                 <input type="text" id="plane-tail-number" placeholder="Enter tail number" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
                             </div>
+                            
                             <div>
                                 <label class="block text-sm font-medium text-gray-300 mb-1">Model *</label>
-                                <input type="text" id="plane-model" placeholder="Enter model" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+                                <select id="plane-model-select" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                                    <option value="">Select a model...</option>
+                                    ${planeModelsCache.map(m => `<option value="${m.id}">${m.model_name}</option>`).join('')}
+                                    <option value="new_model_option" class="font-bold text-blue-400 bg-gray-800">+ Add new model</option>
+                                </select>
+                                
+                                <div id="new-model-container" class="hidden mt-3 p-3 border border-gray-700 rounded bg-gray-800 animate-fade-in">
+                                    <p class="text-xs text-blue-300 mb-2 font-semibold flex items-center gap-1">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                        New Model Details
+                                    </p>
+                                    <div class="grid grid-cols-1 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-400 mb-1">New Model Name *</label>
+                                            <input type="text" id="new-model-name" placeholder="e.g. Cessna 172S" class="w-full p-2 border border-gray-600 rounded bg-gray-900 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-400 mb-1">Category *</label>
+                                            <select id="new-model-category" class="w-full p-2 border border-gray-600 rounded bg-gray-900 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                                <option value="SE">Single Engine (SE)</option>
+                                                <option value="ME">Multi Engine (ME)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-300 mb-1">Status</label>
                                 <select id="plane-status" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                     <option value="available">Available</option>
-                                    <option value="in_use">In Use</option>
                                     <option value="maintenance">Maintenance</option>
-                                    <option value="unavailable">Unavailable</option>
+                                    <option value="out_of_service">Out of Service</option>
                                 </select>
                             </div>
                         </div>
@@ -162,23 +223,82 @@ export async function loadPlanesPage() {
 
     await fetchPlanes();
 
-    // NOW set up the event listeners (the modal exists in the DOM)
-    document.getElementById("add-plane-btn").addEventListener("click", showPlaneModal);
+    // Event Listeners
+    if (permissions.canAdd) {
+        document.getElementById("add-plane-btn")?.addEventListener("click", showPlaneModal);
+        document.getElementById("empty-add-btn")?.addEventListener("click", showPlaneModal);
+    }
     document.getElementById("close-plane-modal").addEventListener("click", hidePlaneModal);
     document.getElementById("cancel-plane-btn").addEventListener("click", hidePlaneModal);
 
-    // Submit handler
+    // --- NEW: Toggle "Add New Model" inputs ---
+    const modelSelect = document.getElementById("plane-model-select");
+    const newModelContainer = document.getElementById("new-model-container");
+    const newModelNameInput = document.getElementById("new-model-name");
+
+    modelSelect?.addEventListener("change", (e) => {
+        if (e.target.value === "new_model_option") {
+            newModelContainer.classList.remove("hidden");
+            newModelNameInput.required = true;
+            newModelNameInput.focus();
+        } else {
+            newModelContainer.classList.add("hidden");
+            newModelNameInput.required = false;
+            newModelNameInput.value = ""; // Clear
+        }
+    });
+
+    // --- UPDATED: Submit handler with Logic for Creating New Model ---
     document.getElementById("add-plane-form").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const tailNumber = document.getElementById("plane-tail-number").value;
-        const model = document.getElementById("plane-model").value;
-        const status = document.getElementById("plane-status").value;
 
-        const { error } = await supabase.from("planes").insert([{
+        const tailNumber = document.getElementById("plane-tail-number").value;
+        const status = document.getElementById("plane-status").value;
+        let modelId = document.getElementById("plane-model-select").value; // UUID or "new_model_option"
+
+        // 1. Handle New Model Creation if selected
+        if (modelId === "new_model_option") {
+            const newName = document.getElementById("new-model-name").value;
+            const newCategory = document.getElementById("new-model-category").value; // "SE" or "ME"
+
+            if (!newName) {
+                showToast("Please enter a name for the new model", "error");
+                return;
+            }
+
+            // Call RPC to create the model first
+            // Note: api.insert_plane_model expects JSONB payload with model_name and category
+            const { data: newModel, error: modelError } = await supabase
+                .schema('api')
+                .rpc('insert_plane_model', {
+                    payload: {
+                        model_name: newName,
+                        category: newCategory
+                    }
+                });
+
+            if (modelError) {
+                showToast("Error creating new model: " + modelError.message, "error");
+                return;
+            }
+
+            // Use the ID of the newly created model
+            modelId = newModel.id;
+
+            // Refresh the cache so the next time we open the modal, this model is available
+            await fetchPlaneModels();
+        }
+
+        // 2. Construct RPC Payload for the Plane
+        const payload = {
             tail_number: tailNumber,
-            model: model,
-            status: status
-        }]);
+            model_id: modelId,
+            status: status,
+            hours_flown: 0
+        };
+
+        // 3. Create the Plane using RPC api.insert_plane
+        const { error } = await supabase.schema('api').rpc('insert_plane', { payload });
 
         if (!error) {
             hidePlaneModal();
@@ -207,25 +327,50 @@ export async function loadPlanesPage() {
         });
     });
 
+    document.getElementById("global-fuel-btn")?.addEventListener("click", loadFuelHistoryPage);
+    document.getElementById("global-oil-btn")?.addEventListener("click", loadOilHistoryPage);
+}
 
-    fetchPlanes();
-    setTimeout(() => {
-        if (typeof initializeCustomPickers === 'function') {
-            initializeCustomPickers();
-        }
-    }, 100);
+// Helper to get models first
+async function fetchPlaneModels() {
+    const { data, error } = await supabase.schema('api').rpc('get_plane_models');
+    if (!error && data) {
+        planeModelsCache = data;
+    }
+}
+
+// Helper to fetch members (used for Autocomplete)
+async function fetchMembers() {
+    // Only fetch if cache is empty
+    if (membersCache.length > 0) return;
+
+    // We use  as required by autocomplete.js config
+    const { data, error } = await getMembers();
+    if (!error && data) {
+        membersCache = data;
+    } else {
+        console.error("Failed to fetch members for autocomplete", error);
+    }
+}
+
+// Helper to look up model name from ID
+function getModelName(modelId) {
+    const model = planeModelsCache.find(m => m.id === modelId);
+    return model ? model.model_name : 'Unknown Model';
 }
 
 
 function renderStatus(status) {
+    // Map SQL enums to UI Icons
     switch (status) {
         case "available":
             return "✅";   // available
-        case "in_use":
+        case "in_use": // Calculated state, not in SQL enum but used in UI logic
             return "✈️";   // in flight / in use
         case "maintenance":
             return "🛠️";   // under maintenance
-        case "unavailable":
+        case "out_of_service":
+        case "unavailable": // Fallback for old data
             return "❌";   // grounded / unavailable
         default:
             return "ℹ️";   // fallback
@@ -252,8 +397,7 @@ function renderTable() {
                 </div>
             </td>
             <td class="p-4 border-b border-gray-700 font-medium">${plane.tail_number}</td>
-            <td class="p-4 border-b border-gray-700">${plane.model}</td>
-            <td class="p-4 border-b border-gray-700">${plane.current_flight || '<span class="text-gray-500">-</span>'}</td>
+            <td class="p-4 border-b border-gray-700">${plane.model}</td> <td class="p-4 border-b border-gray-700">${plane.current_flight || '<span class="text-gray-500">-</span>'}</td>
             <td class="p-4 border-b border-gray-700">${plane.next_flight || '<span class="text-gray-500">-</span>'}</td>
         </tr>
     `).join('');
@@ -311,29 +455,27 @@ function updateSortArrows() {
 }
 
 async function loadPlaneMenu(planeId) {
-    const { data, error } = await supabase.from("planes").select("*").eq("id", planeId).single();
-    if (error) {
-        showToast("Error loading plane: " + error.message, "error");
+    // 1. Fetch Plane with RPC
+    const { data: pData, error } = await supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: planeId });
+    if (error || !pData || pData.length === 0) {
+        showToast("Error loading plane: " + (error ? error.message : "Not found"), "error");
         return;
     }
 
-    const p = data;
+    // api.get_plane_by_id returns an array (SETOF), take first
+    const p = pData[0];
+    // Map model_id to string
+    p.model = getModelName(p.model_id);
 
-    // NEW: Fetch recent flight activity for this plane
+    // 2. Fetch recent flight activity using RPC
     const { data: recentFlights, error: flightsError } = await supabase
-        .from('flight_logs')
-        .select('flight_date, flight_duration, departure_iata, arrival_iata, pilot_name, type_of_flight')
-        .eq('plane_id', planeId)
-        .order('flight_date', { ascending: false })
-        .limit(5);
+        .schema('api').rpc('get_flight_logs_by_plane', { plane_uuid: planeId });
+    // RPC sorts by date desc already
 
-    // NEW: Fetch maintenance records
+    // 3. Fetch maintenance records using RPC
     const { data: maintenanceRecords, error: maintenanceError } = await supabase
-        .from('maintenance')
-        .select('*')
-        .eq('plane_id', planeId)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .schema('api').rpc('get_maintenance_by_plane', { plane_uuid: planeId });
+
 
     document.getElementById("main-content").innerHTML = `
         <div class="flex items-center mb-4 cursor-pointer" id="back-to-table">← Go Back</div>
@@ -342,7 +484,6 @@ async function loadPlaneMenu(planeId) {
             <p class="text-gray-400">${p.model} • ${renderStatus(p.status)} ${p.status.replace('_', ' ').toUpperCase()}</p>
         </div>
 
-        <!-- NEW: Plane Stats Overview -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gray-800 p-4 rounded-xl text-center">
                 <div class="text-sm text-gray-400">Total Hours</div>
@@ -352,14 +493,14 @@ async function loadPlaneMenu(planeId) {
             <div class="bg-gray-800 p-4 rounded-xl text-center">
                 <div class="text-sm text-gray-400">Recent Flights</div>
                 <div class="text-2xl font-bold text-green-400">${recentFlights ? recentFlights.length : '0'}</div>
-                <div class="text-sm text-gray-400">Last 5 flights</div>
+                <div class="text-sm text-gray-400">Logged flights</div>
             </div>
             <div class="bg-gray-800 p-4 rounded-xl text-center">
                 <div class="text-sm text-gray-400">Maintenance</div>
                 <div class="text-2xl font-bold ${maintenanceRecords && maintenanceRecords.length > 0 ? 'text-yellow-400' : 'text-green-400'}">
                     ${maintenanceRecords ? maintenanceRecords.length : '0'}
                 </div>
-                <div class="text-sm text-gray-400">Active records</div>
+                <div class="text-sm text-gray-400">Total records</div>
             </div>
             <div class="bg-gray-800 p-4 rounded-xl text-center">
                 <div class="text-sm text-gray-400">Last Service</div>
@@ -369,7 +510,6 @@ async function loadPlaneMenu(planeId) {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Quick Actions -->
             <div class="space-y-4">
                 <h2 class="text-xl font-semibold mb-2">Quick Actions</h2>
                 <button class="w-full px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-500 text-left flex items-center" id="flight-history-btn">
@@ -402,21 +542,19 @@ async function loadPlaneMenu(planeId) {
                 </button>
             </div>
 
-            <!-- NEW: Recent Activity -->
             <div class="space-y-4">
                 <h2 class="text-xl font-semibold mb-2">Recent Activity</h2>
                 
-                <!-- Recent Flights -->
                 <div class="bg-gray-800 p-4 rounded-xl">
                     <h3 class="font-semibold mb-3 text-gray-200">Recent Flights</h3>
                     <div class="space-y-2 max-h-48 overflow-y-auto">
                         ${recentFlights && recentFlights.length > 0 ?
-            recentFlights.map(flight => `
+            recentFlights.slice(0, 3).map(flight => `
         <div class="flex justify-between items-center p-2 bg-gray-700 rounded">
             <div>
-                <div class="font-medium text-sm">${flight.departure_iata} → ${flight.arrival_iata}</div>
+                <div class="font-medium text-sm">${flight.departure_icao} → ${flight.arrival_icao}</div>
                 <div class="text-xs text-gray-400">
-                    ${new Date(flight.flight_date).toLocaleDateString()} • ${flight.pilot_name}
+                    ${new Date(flight.flight_date).toLocaleDateString()}
                 </div>
             </div>
             <div class="text-right">
@@ -430,12 +568,11 @@ async function loadPlaneMenu(planeId) {
                     </div>
                 </div>
 
-                <!-- Maintenance Status -->
                 <div class="bg-gray-800 p-4 rounded-xl">
                     <h3 class="font-semibold mb-3 text-gray-200">Maintenance Status</h3>
                     <div class="space-y-2">
                         ${maintenanceRecords && maintenanceRecords.length > 0 ?
-            maintenanceRecords.map(record => `
+            maintenanceRecords.slice(0, 5).map(record => `
                                 <div class="flex justify-between items-center p-2 bg-gray-700 rounded">
                                     <div>
                                         <div class="font-medium text-sm">${record.notes || 'Maintenance'}</div>
@@ -460,7 +597,6 @@ async function loadPlaneMenu(planeId) {
         loadPlanesPage();
     });
 
-    // TODO: implement each button functionality
     document.getElementById("flight-history-btn").addEventListener("click", () => {
         loadFlightHistory(planeId);
     });
@@ -468,79 +604,157 @@ async function loadPlaneMenu(planeId) {
         loadFutureBookings(planeId);
     });
     document.getElementById("maintenance-history-btn").addEventListener("click", () => {
-        showToast("Maintenance history feature coming soon!", "info");
+        // Current: showToast("Maintenance history feature coming soon!", "info");
+
+        // New Implementation:
+        maintenanceModal.show(planeId, p.tail_number);
     });
     document.getElementById("fuel-oil-btn").addEventListener("click", () => {
-        showToast("Fuel & oil tracking feature coming soon!", "info");
+        // OLD: showToast("Fuel & oil tracking feature coming soon!", "info");
+
+        // NEW:
+        fuelModal.show(planeId, p.tail_number);
     });
 }
 
-async function loadFutureBookings(planeId) {
-    const { data: plane, error: planeError } = await supabase
-        .from("planes")
-        .select("tail_number, model")
-        .eq("id", planeId)
-        .single();
+// Render the Booking Modal Template (with Autocomplete hooks)
+function renderBookingModal() {
+    // Avoid duplicate injection
+    if (document.getElementById("booking-modal")) return;
 
-    if (planeError) {
-        showToast("Error loading plane details: " + planeError.message, "error");
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="booking-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
+            <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Add Booking</h2>
+                    <button id="close-booking-modal" class="text-gray-400 hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <form id="add-booking-form" class="space-y-6">
+                    <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
+                        <legend class="font-semibold text-gray-100 px-2">Booking Details</legend>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Start Time *</label>
+                                <input type="datetime-local" id="booking-start" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">End Time *</label>
+                                <input type="datetime-local" id="booking-end" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Pilot/Student *</label>
+                                <div class="relative">
+                                    <input type="text" id="booking-pilot-search" placeholder="Search pilot..." class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white" autocomplete="off">
+                                    <input type="hidden" id="booking-pilot-id" required> 
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Instructor (Optional)</label>
+                                <div class="relative">
+                                    <input type="text" id="booking-instructor-search" placeholder="Search instructor..." class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white" autocomplete="off">
+                                    <input type="hidden" id="booking-instructor-id">
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                                <textarea id="booking-description" rows="2" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-900 text-white placeholder-gray-400"></textarea>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+                        <button type="button" id="cancel-booking-btn" class="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-medium">
+                            Save Booking
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `);
+
+    // Setup close handlers
+    const modal = document.getElementById("booking-modal");
+    const closeBtn = document.getElementById("close-booking-modal");
+    const cancelBtn = document.getElementById("cancel-booking-btn");
+
+    const hideModal = () => {
+        modal.classList.add("hidden");
+        document.getElementById("add-booking-form").reset();
+    };
+
+    closeBtn.addEventListener("click", hideModal);
+    cancelBtn.addEventListener("click", hideModal);
+}
+
+async function loadFutureBookings(planeId) {
+    // 0. Ensure we have data for the autocomplete before rendering
+    await fetchMembers();
+
+    const { data: pData, error: planeError } = await supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: planeId });
+
+    if (planeError || !pData[0]) {
+        showToast("Error loading plane details", "error");
         return;
     }
+    const plane = pData[0];
+    plane.model = getModelName(plane.model_id);
 
-    // Get current date and time for filtering future bookings
-    const now = new Date().toISOString();
-
-    // Fetch future bookings for this plane without complex joins
-    const { data: futureBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('plane_id', planeId)
-        .gte('start_time', now)
-        .order('start_time', { ascending: true });
+    // Fetch future bookings using RPC
+    const { data: allBookings, error: bookingsError } = await supabase
+        .schema('api').rpc('get_bookings_by_plane', { plane_uuid: planeId });
 
     if (bookingsError) {
-        showToast("Error loading future bookings: " + bookingsError.message, "error");
+        showToast("Error loading bookings: " + bookingsError.message, "error");
         return;
     }
 
-    // Fetch related data separately
+    // Filter in JS to preserve logic (Constraint: Logic Lock)
+    const now = new Date();
+    const futureBookings = allBookings.filter(b => new Date(b.start_time) >= now);
+
+    // Fetch related data using 
     let studentsMap = new Map();
     let instructorsMap = new Map();
 
     if (futureBookings && futureBookings.length > 0) {
-        // Get all unique student and instructor IDs
-        const studentIds = new Set();
-        const instructorIds = new Set();
+        // Use cached members for mapping names
+        if (membersCache.length === 0) await fetchMembers();
 
-        futureBookings.forEach(booking => {
-            if (booking.student1_id) studentIds.add(booking.student1_id);
-            if (booking.student2_id) studentIds.add(booking.student2_id);
-            if (booking.student3_id) studentIds.add(booking.student3_id);
-            if (booking.instructor_id) instructorIds.add(booking.instructor_id);
-        });
+        futureBookings.forEach(b => {
+            const resolveName = (userId) => {
+                // Assumingw IDs align or we map via Users table. 
+                // For simplicity in this demo integration, checking cached members directly.
+                const member = membersCache.find(m => m.id === userId || m.user_id === userId); // Handle likely ID mismatch scenarios
+                return member;
+            };
 
-        // Fetch students and instructors in parallel
-        const [studentsResponse, instructorsResponse] = await Promise.all([
-            studentIds.size > 0 ?
-                supabase.from('students').select('*').in('id', Array.from(studentIds)) :
-                { data: [], error: null },
-            instructorIds.size > 0 ?
-                supabase.from('instructors').select('*').in('id', Array.from(instructorIds)) :
-                { data: [], error: null }
-        ]);
+            // Instructors
+            if (b.instructor_id) {
+                const member = resolveName(b.instructor_id);
+                if (member) instructorsMap.set(b.instructor_id, member);
+            }
 
-        // Create lookup maps
-        studentsResponse.data?.forEach(student => {
-            studentsMap.set(student.id, student);
-        });
-        instructorsResponse.data?.forEach(instructor => {
-            instructorsMap.set(instructor.id, instructor);
+            // Pilots/Students
+            const studentIds = [b.pilot_id, b.student2_id, b.student3_id].filter(Boolean);
+            studentIds.forEach(sid => {
+                const member = resolveName(sid);
+                if (member) studentsMap.set(sid, member);
+            });
         });
     }
 
     document.getElementById("main-content").innerHTML = `
         <div class="space-y-6">
-            <!-- Header with Back Button -->
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <button class="text-blue-400 hover:text-blue-300 flex items-center" id="back-to-plane-menu">
@@ -555,7 +769,6 @@ async function loadFutureBookings(planeId) {
                 </div>
             </div>
 
-            <!-- Statistics Summary -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-gray-800 p-4 rounded-xl text-center">
                     <div class="text-2xl font-bold text-blue-400">
@@ -583,13 +796,11 @@ async function loadFutureBookings(planeId) {
                 </div>
             </div>
 
-            <!-- Calendar View Toggle -->
             <div class="flex justify-center space-x-4">
                 <button class="px-4 py-2 bg-blue-600 text-white rounded" id="list-view-btn">List View</button>
                 <button class="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600" id="calendar-view-btn">Calendar View</button>
             </div>
 
-            <!-- List View -->
             <div id="list-view" class="space-y-4">
                 <div class="bg-gray-800 rounded-xl overflow-hidden">
                     <div class="p-4 border-b border-gray-700">
@@ -613,6 +824,8 @@ async function loadFutureBookings(planeId) {
         const startTime = new Date(booking.start_time);
         const endTime = new Date(booking.end_time);
         const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+
+        // Pass map to helper
         const studentNames = getStudentNamesFromMap(booking, studentsMap);
         const instructor = booking.instructor_id ? instructorsMap.get(booking.instructor_id) : null;
         const instructorName = instructor ?
@@ -646,14 +859,16 @@ async function loadFutureBookings(planeId) {
                                                 </td>
                                                 <td class="p-3">
                                                     <div class="flex space-x-2">
+                                                        ${permissions.canEdit ? `
                                                         <button class="text-blue-400 hover:text-blue-300 text-sm edit-booking" 
                                                                 data-id="${booking.id}">
                                                             Edit
-                                                        </button>
+                                                        </button>` : ''}
+                                                        ${permissions.canDelete ? `
                                                         <button class="text-red-400 hover:text-red-300 text-sm cancel-booking" 
                                                                 data-id="${booking.id}">
                                                             Cancel
-                                                        </button>
+                                                        </button>` : ''}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -672,17 +887,14 @@ async function loadFutureBookings(planeId) {
                 </div>
             </div>
 
-            <!-- Calendar View (Hidden by Default) -->
             <div id="calendar-view" class="hidden">
                 <div class="bg-gray-800 rounded-xl p-4">
                     <h2 class="text-lg font-semibold mb-4">Calendar View</h2>
                     <div id="calendar-container" class="grid grid-cols-7 gap-2">
-                        <!-- Calendar will be populated by JavaScript -->
-                    </div>
+                        </div>
                 </div>
             </div>
 
-            <!-- Quick Actions -->
             <div class="flex justify-end space-x-3">
                 <button class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded flex items-center space-x-2" id="add-booking-btn">
                     <span>➕</span>
@@ -695,6 +907,9 @@ async function loadFutureBookings(planeId) {
             </div>
         </div>
     `;
+
+    // Ensure Modal DOM exists and inject if missing
+    renderBookingModal();
 
     // Back button event
     document.getElementById("back-to-plane-menu").addEventListener("click", () => {
@@ -721,10 +936,72 @@ async function loadFutureBookings(planeId) {
         renderCalendarView(futureBookings, plane, studentsMap);
     });
 
+    // --- REVISITED AUTOCOMPLETE INTEGRATION ---
     // Action buttons
     document.getElementById("add-booking-btn").addEventListener("click", () => {
-        showToast("Add booking functionality to be implemented", "info");
+        // Show the modal
+        const modal = document.getElementById("booking-modal");
+        modal.classList.remove("hidden");
+
+        // Initialize Autocomplete for Pilot
+        setupPersonAutocomplete({
+            inputId: 'booking-pilot-search',
+            hiddenId: 'booking-pilot-id',
+            peopleData: membersCache,
+            roleFilter: 'pilots', // Show pilots and students
+            onSelect: (selected) => {
+                console.log("Selected Pilot:", selected);
+            }
+        });
+
+        // Initialize Autocomplete for Instructor
+        setupPersonAutocomplete({
+            inputId: 'booking-instructor-search',
+            hiddenId: 'booking-instructor-id',
+            peopleData: membersCache,
+            roleFilter: 'instructors', // Show only instructors
+            onSelect: (selected) => {
+                console.log("Selected Instructor:", selected);
+            }
+        });
     });
+
+    // Booking Form Submission Handler (Mock implementation)
+    const bookingForm = document.getElementById("add-booking-form");
+    // Remove old listeners to prevent duplicates if re-rendered
+    const newForm = bookingForm.cloneNode(true);
+    bookingForm.parentNode.replaceChild(newForm, bookingForm);
+
+    newForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const bookingData = {
+            plane_id: planeId,
+            start_time: document.getElementById('booking-start').value,
+            end_time: document.getElementById('booking-end').value,
+            pilot_id: document.getElementById('booking-pilot-id').value,
+            instructor_id: document.getElementById('booking-instructor-id').value,
+            description: document.getElementById('booking-description').value
+        };
+
+        if (!bookingData.pilot_id) {
+            showToast("Please select a valid Pilot/Student", "error");
+            return;
+        }
+
+        console.log("Submitting Booking:", bookingData);
+        await supabase.schema('api').rpc('insert_booking', { booking: bookingData });
+        if (error) {
+            showToast("Error saving booking: " + error.message, "error");
+            return;
+        }
+        showToast("Booking added successfully!", "success");
+        document.getElementById("booking-modal").classList.add("hidden");
+        // Reload to show new booking (if RPC was active)
+        loadFutureBookings(planeId);
+
+    });
+
 
     document.getElementById("export-schedule").addEventListener("click", () => {
         exportScheduleToCSV(futureBookings, plane, studentsMap, instructorsMap);
@@ -747,60 +1024,51 @@ async function loadFutureBookings(planeId) {
 }
 
 async function loadFlightHistory(planeId) {
-    const { data: plane, error: planeError } = await supabase
-        .from("planes")
-        .select("tail_number, model")
-        .eq("id", planeId)
-        .single();
+    const { data: pData, error: planeError } = await supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: planeId });
 
-    if (planeError) {
-        showToast("Error loading plane details: " + planeError.message, "error");
+    if (planeError || !pData[0]) {
+        showToast("Error loading plane details", "error");
         return;
     }
+    const plane = pData[0];
+    plane.model = getModelName(plane.model_id);
 
-    // Fetch flight history without joins (since foreign keys don't exist)
+    // Fetch flight history using RPC
     const { data: flightHistory, error: flightsError } = await supabase
-        .from('flight_logs')
-        .select('*')
-        .eq('plane_id', planeId)
-        .order('flight_date', { ascending: false });
+        .schema('api').rpc('get_flight_logs_by_plane', { plane_uuid: planeId });
+    // Note: RPC sorts desc by default
 
     if (flightsError) {
         showToast("Error loading flight history: " + flightsError.message, "error");
         return;
     }
 
-    // If you need student/instructor details, fetch them separately
+    // Reuse logic to fetch names if needed, similar to bookings, using View
     let studentsMap = new Map();
     let instructorsMap = new Map();
 
     if (flightHistory && flightHistory.length > 0) {
-        // Get unique student and instructor UUIDs from flight logs
-        const studentUuids = [...new Set(flightHistory.map(f => f.pilot_uuid).filter(Boolean))];
-        const instructorUuids = [...new Set(flightHistory.map(f => f.instructor_uuid).filter(Boolean))];
+        // Use cached members
+        if (membersCache.length === 0) await fetchMembers();
 
-        // Fetch students and instructors in parallel
-        const [studentsResponse, instructorsResponse] = await Promise.all([
-            studentUuids.length > 0 ?
-                supabase.from('students').select('*').in('id', studentUuids) :
-                { data: [], error: null },
-            instructorUuids.length > 0 ?
-                supabase.from('instructors').select('*').in('id', instructorUuids) :
-                { data: [], error: null }
-        ]);
+        flightHistory.forEach(f => {
+            const resolveName = (userId) => {
+                return membersCache.find(m => m.id === userId || m.user_id === userId);
+            };
 
-        // Create lookup maps
-        studentsResponse.data?.forEach(student => {
-            studentsMap.set(student.id, student);
-        });
-        instructorsResponse.data?.forEach(instructor => {
-            instructorsMap.set(instructor.id, instructor);
+            if (f.pilot_uuid) {
+                const m = resolveName(f.pilot_uuid);
+                if (m) studentsMap.set(f.pilot_uuid, m);
+            }
+            if (f.instructor_uuid) {
+                const m = resolveName(f.instructor_uuid);
+                if (m) instructorsMap.set(f.instructor_uuid, m);
+            }
         });
     }
 
     document.getElementById("main-content").innerHTML = `
         <div class="space-y-6">
-            <!-- Header with Back Button -->
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <button class="text-blue-400 hover:text-blue-300 flex items-center" id="back-to-plane-menu">
@@ -815,7 +1083,6 @@ async function loadFlightHistory(planeId) {
                 </div>
             </div>
 
-            <!-- Statistics Summary -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-gray-800 p-4 rounded-xl text-center">
                     <div class="text-2xl font-bold text-blue-400">
@@ -825,25 +1092,22 @@ async function loadFlightHistory(planeId) {
                 </div>
                 <div class="bg-gray-800 p-4 rounded-xl text-center">
                     <div class="text-2xl font-bold text-green-400">
-                        ${flightHistory ? flightHistory.filter(f => f.type_of_flight === 'Training').length : '0'}
-                    </div>
+                        ${flightHistory ? flightHistory.filter(f => f.type_of_flight === 'PI').length : '0'} </div>
                     <div class="text-sm text-gray-400">Training Flights</div>
                 </div>
                 <div class="bg-gray-800 p-4 rounded-xl text-center">
                     <div class="text-2xl font-bold text-yellow-400">
-                        ${flightHistory ? flightHistory.filter(f => f.type_of_flight === 'Solo').length : '0'}
-                    </div>
+                        ${flightHistory ? flightHistory.filter(f => f.type_of_flight === 'Solo').length : '0'} </div>
                     <div class="text-sm text-gray-400">Solo Flights</div>
                 </div>
                 <div class="bg-gray-800 p-4 rounded-xl text-center">
                     <div class="text-2xl font-bold text-purple-400">
-                        ${flightHistory ? [...new Set(flightHistory.map(f => f.pilot_name))].length : '0'}
+                        ${flightHistory ? [...new Set(flightHistory.map(f => f.pilot_uuid))].length : '0'}
                     </div>
                     <div class="text-sm text-gray-400">Unique Pilots</div>
                 </div>
             </div>
 
-            <!-- Flight History Table -->
             <div class="bg-gray-800 rounded-xl overflow-hidden">
                 <div class="p-4 border-b border-gray-700">
                     <h2 class="text-lg font-semibold">All Flights</h2>
@@ -871,22 +1135,17 @@ async function loadFlightHistory(planeId) {
                                     <tr class="hover:bg-gray-750">
                                         <td class="p-3">${new Date(flight.flight_date).toLocaleDateString()}</td>
                                         <td class="p-3">
-                                            <div class="font-medium">${flight.pilot_name}</div>
-                                            ${student ?
-                        `<div class="text-xs text-gray-400">Student</div>` :
-                        `<div class="text-xs text-gray-400">Pilot</div>`
-                    }
+                                            <div class="font-medium">${student ? `${student.first_name} ${student.last_name}` : 'Unknown'}</div>
+                                            <div class="text-xs text-gray-400">Pilot</div>
                                         </td>
                                         <td class="p-3">
-                                            <div class="font-mono">${flight.departure_iata} → ${flight.arrival_iata}</div>
-                                            <div class="text-xs text-gray-400">${flight.departure_time} - ${flight.arrival_time}</div>
+                                            <div class="font-mono">${flight.departure_icao} → ${flight.arrival_icao}</div> <div class="text-xs text-gray-400">
+                                                ${new Date(flight.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                                                ${new Date(flight.arrival_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
                                         </td>
                                         <td class="p-3">
-                                            <span class="px-2 py-1 rounded text-xs ${flight.type_of_flight === 'Training' ? 'bg-blue-600' :
-                        flight.type_of_flight === 'Solo' ? 'bg-green-600' :
-                            flight.type_of_flight === 'Cross Country' ? 'bg-orange-600' :
-                                'bg-gray-600'
-                    }">
+                                            <span class="px-2 py-1 rounded text-xs ${flight.type_of_flight === 'PI' ? 'bg-blue-600' : 'bg-gray-600'}">
                                                 ${flight.type_of_flight}
                                             </span>
                                         </td>
@@ -897,7 +1156,7 @@ async function loadFlightHistory(planeId) {
                                             </div>
                                         </td>
                                         <td class="p-3">
-                                            ${instructor ? `${instructor.first_name} ${instructor.last_name}` : (flight.instructor_name || 'N/A')}
+                                            ${instructor ? `${instructor.first_name} ${instructor.last_name}` : '-'}
                                         </td>
                                         <td class="p-3">
                                             <button class="text-blue-400 hover:text-blue-300 text-sm view-flight-details" 
@@ -918,7 +1177,6 @@ async function loadFlightHistory(planeId) {
                 </div>
             </div>
 
-            <!-- Export Options -->
             <div class="flex justify-end space-x-3">
                 <button class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded flex items-center space-x-2" id="export-csv">
                     <span>📥</span>
@@ -967,15 +1225,14 @@ function exportFlightHistoryToCSV(flightHistory, plane) {
         return;
     }
 
-    const headers = ['Date', 'Pilot', 'Departure', 'Arrival', 'Duration', 'Type', 'Instructor', 'Remarks'];
+    const headers = ['Date', 'Pilot', 'Departure', 'Arrival', 'Duration', 'Type', 'Remarks'];
     const csvData = flightHistory.map(flight => [
         new Date(flight.flight_date).toLocaleDateString(),
-        flight.pilot_name,
-        flight.departure_iata,
-        flight.arrival_iata,
+        flight.pilot_uuid, // CSV will show UUID for now in Demo Mode
+        flight.departure_icao,
+        flight.arrival_icao,
         flight.flight_duration,
         flight.type_of_flight,
-        flight.instructor_name || 'N/A',
         flight.remarks || ''
     ]);
 
@@ -994,30 +1251,6 @@ function exportFlightHistoryToCSV(flightHistory, plane) {
     window.URL.revokeObjectURL(url);
 
     showToast('Flight history exported successfully!', 'success');
-}
-
-function showToast(message, type = "success") {
-    let container = document.getElementById("toast-container");
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "toast-container";
-        container.className = "fixed top-4 right-4 z-50 space-y-2";
-        document.body.appendChild(container);
-    }
-
-    const toast = document.createElement("div");
-    toast.className = `px-4 py-2 rounded shadow text-white animate-fade-in 
-        ${type === "success" ? "bg-green-500" :
-            type === "error" ? "bg-red-500" :
-                type === "info" ? "bg-blue-500" : "bg-gray-500"}`;
-    toast.innerText = message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.classList.add("animate-fade-out");
-        setTimeout(() => toast.remove(), 500);
-    }, 3000);
 }
 
 // Helper functions for date calculations
@@ -1065,24 +1298,12 @@ function isNextWeek(date) {
 function getUniqueStudentsCount(bookings) {
     const studentIds = new Set();
     bookings.forEach(booking => {
-        if (booking.student1_id) studentIds.add(booking.student1_id);
+        if (booking.pilot_id) studentIds.add(booking.pilot_id); // using pilot_id as main field from SQL
         if (booking.student2_id) studentIds.add(booking.student2_id);
         if (booking.student3_id) studentIds.add(booking.student3_id);
     });
     return studentIds.size;
 }
-
-function getStudentNames(booking) {
-    const names = [];
-    if (booking.students && booking.students.first_name) {
-        names.push(`${booking.students.first_name} ${booking.students.last_name}`);
-    }
-    // Note: For student2 and student3, you'd need to handle the array structure
-    // This is simplified - you might need to adjust based on your actual data structure
-    return names.length > 0 ? names : ['No students assigned'];
-}
-
-
 
 function editBooking(bookingId) {
     showToast(`Edit booking ${bookingId} - To be implemented`, 'info');
@@ -1090,8 +1311,8 @@ function editBooking(bookingId) {
 
 function getStudentNamesFromMap(booking, studentsMap) {
     const names = [];
-    if (booking.student1_id) {
-        const student = studentsMap.get(booking.student1_id);
+    if (booking.pilot_id) {
+        const student = studentsMap.get(booking.pilot_id);
         if (student) names.push(`${student.first_name} ${student.last_name}`);
     }
     if (booking.student2_id) {
@@ -1173,10 +1394,8 @@ function renderCalendarView(bookings, plane, studentsMap) {
 
 async function cancelBooking(bookingId, planeId) {
     if (confirm('Are you sure you want to cancel this booking?')) {
-        const { error } = await supabase
-            .from('bookings')
-            .delete()
-            .eq('id', bookingId);
+        // Use RPC api.delete_booking
+        const { error } = await supabase.schema('api').rpc('delete_booking', { booking_uuid: bookingId });
 
         if (error) {
             showToast('Error cancelling booking: ' + error.message, 'error');
@@ -1249,12 +1468,20 @@ function showLoading(show) {
     }
 }
 
-// Update your fetchPlanes function to use loading states
 async function fetchPlanes() {
     showLoading(true);
-    const { data, error } = await supabase.from("planes").select("*");
+    // Use RPC api.get_planes
+    const { data, error } = await supabase.schema('api').rpc('get_planes');
+
+    // Ensure we have models loaded to map names
+    if (!planeModelsCache.length) await fetchPlaneModels();
+
     if (!error) {
-        planesData = data;
+        // Map model_id UUID to model_name string for the UI table
+        planesData = data.map(p => ({
+            ...p,
+            model: getModelName(p.model_id)
+        }));
         renderTable();
     } else {
         console.error('Error fetching planes:', error);
@@ -1265,10 +1492,23 @@ async function fetchPlanes() {
 
 function showPlaneModal() {
     document.getElementById("plane-modal").classList.remove("hidden");
+    // Ensure select is populated if cache updated late
+    const select = document.getElementById("plane-model-select");
+    if (select && select.options.length <= 1 && planeModelsCache.length > 0) {
+        select.innerHTML = '<option value="">Select a model...</option>' +
+            planeModelsCache.map(m => `<option value="${m.id}">${m.model_name}</option>`).join('') +
+            '<option value="new_model_option" class="font-bold text-blue-400 bg-gray-800">+ Add new model</option>';
+    }
     document.getElementById("plane-tail-number").focus();
 }
 
 function hidePlaneModal() {
     document.getElementById("plane-modal").classList.add("hidden");
     document.getElementById("add-plane-form").reset();
+
+    // Hide new model container on close
+    const newModelContainer = document.getElementById("new-model-container");
+    const newModelNameInput = document.getElementById("new-model-name");
+    if (newModelContainer) newModelContainer.classList.add("hidden");
+    if (newModelNameInput) newModelNameInput.required = false;
 }

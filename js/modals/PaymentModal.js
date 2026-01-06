@@ -33,6 +33,7 @@ export class PaymentModal {
     }
 
     createModal() {
+        // PRESERVED: Existing DOM structure and Tailwind classes
         this.modal = document.createElement('div');
         this.modal.id = 'payment-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
@@ -92,13 +93,19 @@ export class PaymentModal {
     }
 
     populateData(paymentData) {
+        // UI LOGIC PRESERVED: Mapping logic remains to ensure modal title displays correctly
+        // Note: paymentData.type might come in as 'receivable'/'payable' or 'transaction_direction'
+        // depending on the parent component.
+        const type = paymentData.transaction_direction || paymentData.type;
+
         document.getElementById('payment-modal-title').textContent =
-            `Record ${paymentData.type === 'receivable' ? 'Payment Received' : 'Payment Sent'}`;
+            `Record ${type === 'receivable' ? 'Payment Received' : 'Payment Sent'}`;
 
         document.getElementById('payment-id').value = paymentData.id || '';
-        document.getElementById('payment-type').value = paymentData.type || '';
+        document.getElementById('payment-type').value = type || '';
         document.getElementById('payment-amount').value = paymentData.amount || '';
-        document.getElementById('payment-date').value = paymentData.date || new Date().toISOString().split('T')[0];
+        // If date exists use it, otherwise default to today
+        document.getElementById('payment-date').value = paymentData.date ? paymentData.date.split('T')[0] : new Date().toISOString().split('T')[0];
         document.getElementById('payment-method').value = paymentData.method || '';
         document.getElementById('payment-reference').value = paymentData.reference || '';
         document.getElementById('payment-notes').value = paymentData.notes || '';
@@ -112,7 +119,8 @@ export class PaymentModal {
 
     async recordPayment() {
         const paymentId = document.getElementById('payment-id').value;
-        const paymentType = document.getElementById('payment-type').value;
+        // We no longer need paymentType to determine the table, as everything is in financial_transactions
+        // const paymentType = document.getElementById('payment-type').value; 
         const amount = document.getElementById('payment-amount').value;
         const paymentDate = document.getElementById('payment-date').value;
         const paymentMethod = document.getElementById('payment-method').value;
@@ -125,24 +133,29 @@ export class PaymentModal {
         }
 
         // Validate payment method against allowed values
-        const allowedMethods = ['cash', 'transfer', 'check', 'other'];
+        // Note: SQL Enum supports: 'cash', 'card', 'transfer', 'check', 'other'
+        const allowedMethods = ['cash', 'transfer', 'check', 'other', 'card'];
         if (!allowedMethods.includes(paymentMethod)) {
             showToast('Invalid payment method selected', 'error');
             return;
         }
 
-        const tableName = paymentType === 'receivable' ? 'payments_receivable' : 'payments_payable';
+        // --- REFACTOR: Use RPC instead of direct Table Update ---
 
-        const { error } = await supabase
-            .from(tableName)
-            .update({
-                status: 'paid',
-                paid_at: new Date().toISOString(),
-                payment_method: paymentMethod,
-                reference_number: reference,
-                notes: notes
-            })
-            .eq('id', paymentId);
+        // Construct Payload for api.update_financial_transaction
+        // We don't need to specify 'receivable' or 'payable' table names anymore.
+        const payload = {
+            status: 'paid', // Explicitly setting status to paid
+            paid_at: new Date(paymentDate).toISOString(), // Use the user-selected date formatted for TIMESTAMPTZ
+            payment_method: paymentMethod, // Strict Enum Match
+            reference_number: reference,
+            notes: notes
+        };
+
+        const { error } = await supabase.schema('api').rpc('update_financial_transaction', {
+            transaction_uuid: paymentId,
+            payload: payload
+        });
 
         if (error) {
             showToast('Error recording payment: ' + error.message, 'error');

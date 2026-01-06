@@ -1,39 +1,40 @@
-// ./js/pages/instructordetails.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { editInstructor } from './instructors.js';
 import { FlightDetailsModal } from "../modals/FlightDetailsModal.js";
 import { AddFlightLogModal } from "../modals/AddFlightLogModal.js";
 import { AddBookingModal } from "../modals/AddBookingModal.js";
+import { SettleDebtModal } from "../modals/SettleDebtModal.js";
 
 let currentInstructorId = null;
 let previousPageState = null;
 let flightDetailsModal = new FlightDetailsModal();
+let settleDebtModal = null;
 
 // Declare missing variables
-let instructorsData = [];
-let currentPage = 1;
-let sortState = {};
-let searchState = {};
-let tableStateBackup = {};
-
-let currentInstructorEmail = null;
 let currentBookingModal = null;
 let modalCleanupTimeout = null;
 
-export async function loadInstructorDetailsPage(instructorId = null) {
-    // Get instructor ID from URL hash or passed parameter
+// Cache for autocomplete data
+let cachedStudents = [];
+
+let returnToPage = 'instructors'; // Default return page
+
+// CHANGE: Add 'sourcePage' to the arguments list
+export async function loadInstructorDetailsPage(instructorId = null, sourcePage = 'instructors') {
     const hash = window.location.hash;
     const instructorMatch = hash.match(/^#instructor\/([A-Za-z0-9-]+)$/);
     const instructorIdFromUrl = instructorMatch ? instructorMatch[1] : null;
     currentInstructorId = instructorId || instructorIdFromUrl;
+
+    // CHANGE: Now 'sourcePage' is defined and can be used here
+    returnToPage = sourcePage || 'instructors';
 
     if (!currentInstructorId) {
         showToast('No instructor ID provided', 'error');
         return;
     }
 
-    // Store previous state for back navigation
     previousPageState = {
         page: document.getElementById('main-content').innerHTML,
         scrollPosition: window.scrollY
@@ -43,7 +44,6 @@ export async function loadInstructorDetailsPage(instructorId = null) {
 }
 
 export function setupInstructorDetailsNavigation() {
-    // Handle browser back button
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.page === 'instructordetails') {
             if (previousPageState) {
@@ -57,93 +57,120 @@ export function setupInstructorDetailsNavigation() {
 async function renderInstructorProfile(instructorId) {
     showLoading(true);
 
+    const canEdit = true; // Demo permission flag
+
     try {
-        if (!flightDetailsModal) {
-            flightDetailsModal = new FlightDetailsModal();
+        if (!flightDetailsModal) flightDetailsModal = new FlightDetailsModal();
+
+        let userId = null;
+        const { data: userAccounts, error: userError } = await supabase
+            .schema('api')
+            .rpc('get_user_by_person_id', { target_person_id: instructorId });
+
+        if (!userError && userAccounts && userAccounts.length > 0) {
+            userId = userAccounts[0].id;
+        } else {
+            console.warn("No User Account found for this Instructor. Logs may be empty.");
         }
 
-        // Fetch all required data in parallel
-        const [
-            instructorResult,
-            flightLogsResult,
-            upcomingBookingsResult,
-            recentStudentsResult
-        ] = await Promise.all([
-            // Instructor data
-            supabase
-                .from('instructors')
-                .select('*')
-                .eq('id', instructorId)
-                .single(),
+        // 2. Fetch all data in parallel
+        const promises = [
+            // A. Instructor Profile (Uses Person ID)
+            supabase.schema('api').rpc('get_instructor_by_id', { instructor_uuid: instructorId }).single(),
 
-            // Flight logs as instructor - FIXED: using instructor_uuid instead of instructor_id
-            supabase
-                .from('flight_logs')
-                .select('*')
-                .eq('instructor_uuid', instructorId)
-                .order('flight_date', { ascending: false })
-                .limit(50),
+            // B. Reference Data
+            supabase.schema('api').rpc('get_students'),
+            supabase.schema('api').rpc('get_planes'),
+            supabase.schema('api').rpc('get_plane_models')
+        ];
 
-            // Upcoming bookings as instructor - FIXED: specify exact relationship
-            supabase
-                .from('bookings')
-                .select(`*, planes (tail_number, model), students!bookings_student2_id_fkey (first_name, last_name, student_number)`)
-                .eq('instructor_id', instructorId)
-                .gte('start_time', new Date().toISOString())
-                .order('start_time', { ascending: true })
-                .limit(10),
+        // Only fetch logs if we found a valid User ID
+        if (userId) {
+            // C. Logs as Instructor
+            promises.push(supabase.schema('api').rpc('get_flight_logs').eq('instructor_uuid', userId));
+            // D. Logs as Pilot (Personal flights)
+            promises.push(supabase.schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId }));
+            // E. Bookings as Instructor
+            promises.push(supabase.schema('api').rpc('get_bookings').eq('instructor_id', userId));
+            // F. Bookings as Pilot
+            promises.push(supabase.schema('api').rpc('get_bookings').eq('pilot_id', userId));
+        }
 
-            // Recent students taught (from flight logs) - FIXED: using instructor_uuid
-            supabase
-                .from('flight_logs')
-                .select(`pilot_uuid, students (first_name, last_name, student_number)`)
-                .eq('instructor_uuid', instructorId)
-                .not('pilot_uuid', 'is', null)
-                .order('flight_date', { ascending: false })
-                .limit(20)
-        ]);
+        const results = await Promise.all(promises);
 
-        // Handle errors
-        const instructorError = instructorResult.error;
-        const flightError = flightLogsResult.error;
-        const bookingsError = upcomingBookingsResult.error;
-        const studentsError = recentStudentsResult.error;
+        const instructorResult = results[0];
+        const allStudents = results[1].data || [];
+        const allPlanes = results[2].data || [];
+        const allModels = results[3].data || [];
 
-        if (instructorError) throw instructorError;
+        // Extract conditional results
+        let instructorLogs = [];
+        let pilotLogs = [];
+        let instructorBookings = [];
+        let pilotBookings = [];
 
-        // Log non-critical errors but don't throw
-        if (flightError) console.error('Error fetching flight logs:', flightError);
-        if (bookingsError) console.error('Error fetching bookings:', bookingsError);
-        if (studentsError) console.error('Error fetching recent students:', studentsError);
+        if (userId) {
+            instructorLogs = results[4].data || [];
+            pilotLogs = results[5].data || [];
+            instructorBookings = results[6].data || [];
+            pilotBookings = results[7].data || [];
+        }
 
-        const instructor = instructorResult.data;
-        const flightLogs = flightLogsResult.data || [];
-        const upcomingBookings = upcomingBookingsResult.data || [];
-        const recentStudentsData = recentStudentsResult.data || [];
+        if (instructorResult.error) throw instructorResult.error;
 
-        // Process recent students (remove duplicates)
-        const recentStudents = recentStudentsData
-            .filter((item, index, self) =>
-                index === self.findIndex(t =>
-                    t.pilot_uuid === item.pilot_uuid &&
-                    t.students?.student_number === item.students?.student_number
-                )
+        // --- Data Merging & Processing ---
+
+        // 1. Merge Flight Logs (Handle duplicates if they are both pilot and instructor on same log - rare but possible)
+        // We add a 'role' property to distinguish them in the UI
+        const mergedLogs = [
+            ...instructorLogs.map(l => ({ ...l, _role: 'INSTRUCTOR' })),
+            ...pilotLogs.map(l => ({ ...l, _role: 'PILOT' }))
+        ].sort((a, b) => new Date(b.flight_date) - new Date(a.flight_date));
+
+        // Deduplicate by ID just in case
+        const uniqueLogs = Array.from(new Map(mergedLogs.map(item => [item.id, item])).values());
+
+        // 2. Merge Bookings
+        const startDate = new Date();
+        const mergedBookings = [
+            ...instructorBookings.map(b => ({ ...b, _role: 'INSTRUCTOR' })),
+            ...pilotBookings.map(b => ({ ...b, _role: 'PILOT' }))
+        ]
+            .filter(b => new Date(b.start_time) >= startDate)
+            .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+        // 3. Hydrate Data (Maps)
+        const studentsMap = new Map(allStudents.map(s => [s.id, s]));
+        const planesMap = new Map(allPlanes.map(p => [p.id, p]));
+        const modelsMap = new Map(allModels.map(m => [m.id, m]));
+
+        cachedStudents = allStudents; // Cache for modals
+
+        const hydratedBookings = mergedBookings.map(b => {
+            const plane = planesMap.get(b.plane_id);
+            return {
+                ...b,
+                plane_details: plane ? { ...plane, model: modelsMap.get(plane.model_id)?.model_name } : null,
+                // If instructor, show student name. If pilot, show instructor name (not available easily here without extra fetch, so generic)
+                other_party: b._role === 'INSTRUCTOR' ? studentsMap.get(b.pilot_id) : null
+            };
+        });
+
+        // 4. "Recent Students" Logic 
+        // Only count students from logs where this user was acting as the INSTRUCTOR
+        const studentsTaught = instructorLogs.map(log => studentsMap.get(log.pilot_uuid)).filter(Boolean);
+
+        const recentStudents = studentsTaught
+            .filter((s, index, self) =>
+                index === self.findIndex(t => t.student_number === s.student_number)
             )
-            .map(item => item.students)
-            .filter(student => student != null)
             .slice(0, 8);
 
-        // Calculate statistics
-        const statistics = calculateInstructorStatistics(
-            instructor,
-            flightLogs,
-            upcomingBookings,
-            recentStudents
-        );
+        // 5. Statistics
+        const statistics = calculateMixedStatistics(uniqueLogs, instructorLogs, mergedBookings, recentStudents);
 
-        // Render the profile
-        renderProfileHTML(instructor, statistics, flightLogs, upcomingBookings, recentStudents);
-        setupInstructorDetailsEventListeners(instructorId);
+        renderProfileHTML(instructorResult.data, statistics, uniqueLogs, hydratedBookings, recentStudents, canEdit);
+        setupInstructorDetailsEventListeners(instructorId, userId, uniqueLogs);
 
     } catch (error) {
         console.error('Error loading instructor profile:', error);
@@ -154,32 +181,23 @@ async function renderInstructorProfile(instructorId) {
     }
 }
 
-function calculateInstructorStatistics(instructor, flightLogs, upcomingBookings, recentStudents) {
-    const totalFlights = flightLogs.length;
-    const totalHours = flightLogs.reduce((sum, flight) => sum + parseFloat(flight.flight_duration || 0), 0);
+function calculateMixedStatistics(allLogs, instructorOnlyLogs, upcomingBookings, recentStudents) {
+    const totalFlights = allLogs.length;
+    const totalHours = allLogs.reduce((sum, f) => sum + (parseFloat(f.flight_duration) || 0), 0);
 
-    // Calculate hours by flight type based on actual schema values
-    const soloFlights = flightLogs.filter(f => f.type_of_flight === 'P');
-    const trainingFlights = flightLogs.filter(f =>
-        f.type_of_flight === 'EP / I' ||
-        f.type_of_flight === 'EP / FE' ||
-        f.type_of_flight === 'P / I'
-    );
-    const crossCountryFlights = flightLogs.filter(f => f.nature_of_flight === 'nav');
-    const localFlights = flightLogs.filter(f => f.nature_of_flight === 'loc');
-    const patternFlights = flightLogs.filter(f => f.nature_of_flight === 'pat');
+    // Instruction specific stats
+    const instructionHours = instructorOnlyLogs.reduce((sum, f) => sum + (parseFloat(f.flight_duration) || 0), 0);
 
     const hoursByType = {
-        solo: soloFlights.reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        training: trainingFlights.reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        cross_country: crossCountryFlights.reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        local: localFlights.reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        pattern: patternFlights.reduce((sum, f) => sum + (f.flight_duration || 0), 0)
+        solo: allLogs.filter(f => f.type_of_flight === 'P').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
+        instruction: instructionHours,
+        dual_received: allLogs.filter(f => f._role === 'PILOT' && (f.type_of_flight === 'EPI' || f.type_of_flight === 'PI')).reduce((sum, f) => sum + (f.flight_duration || 0), 0)
     };
 
     return {
         totalFlights,
         totalHours,
+        instructionHours,
         hoursByType,
         upcomingBookingsCount: upcomingBookings.length,
         recentStudentsCount: recentStudents.length,
@@ -187,11 +205,10 @@ function calculateInstructorStatistics(instructor, flightLogs, upcomingBookings,
     };
 }
 
-function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, recentStudents) {
+function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, recentStudents, canEdit) {
     const i = instructor;
 
     document.getElementById('main-content').innerHTML = /* html */ `
-        <!-- Header with Back Button -->
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <button id="back-button" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group">
@@ -204,16 +221,17 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
                 <h1 class="text-2xl font-bold text-white">Instructor Profile</h1>
             </div>
             <div class="flex gap-3">
+                ${canEdit ? `
                 <button id="edit-profile-btn" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
                     Edit Profile
                 </button>
+                ` : ''}
             </div>
         </div>
 
-        <!-- Instructor Header Card -->
         <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-lg border border-gray-700 p-6 mb-6">
             <div class="flex items-start justify-between">
                 <div class="flex items-center gap-6">
@@ -243,28 +261,22 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
                         Certified Instructor
                     </div>
                     <div class="mt-2 text-gray-400 text-sm">
-                        Total Hours: ${i.total_hours || '0'}
+                        Total Logged Hours: ${stats.totalHours.toFixed(1)}
                     </div>
-                    ${i.ratings ? `
-                        <div class="text-gray-400 text-sm">
-                            Ratings: ${i.ratings}
-                        </div>
-                    ` : ''}
                 </div>
             </div>
         </div>
 
-        <!-- Stats Overview -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-4 rounded-xl shadow-lg">
-                <div class="text-purple-200 text-sm font-medium">Total Instruction Hours</div>
-                <div class="text-2xl font-bold text-white mt-1">${stats.totalHours.toFixed(1)}</div>
-                <div class="text-purple-200 text-xs">${stats.totalFlights} flights</div>
+                <div class="text-purple-200 text-sm font-medium">Instruction Given</div>
+                <div class="text-2xl font-bold text-white mt-1">${stats.instructionHours.toFixed(1)}h</div>
+                <div class="text-purple-200 text-xs">As Instructor</div>
             </div>
             <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-xl shadow-lg">
-                <div class="text-blue-200 text-sm font-medium">Upcoming Bookings</div>
-                <div class="text-2xl font-bold text-white mt-1">${stats.upcomingBookingsCount}</div>
-                <div class="text-blue-200 text-xs">Scheduled</div>
+                <div class="text-blue-200 text-sm font-medium">Personal/Pilot</div>
+                <div class="text-2xl font-bold text-white mt-1">${(stats.totalHours - stats.instructionHours).toFixed(1)}h</div>
+                <div class="text-blue-200 text-xs">As Pilot</div>
             </div>
             <div class="bg-gradient-to-br from-green-600 to-green-700 p-4 rounded-xl shadow-lg">
                 <div class="text-green-200 text-sm font-medium">Recent Students</div>
@@ -272,117 +284,61 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
                 <div class="text-green-200 text-xs">Last 30 days</div>
             </div>
             <div class="bg-gradient-to-br from-orange-600 to-orange-700 p-4 rounded-xl shadow-lg">
-                <div class="text-orange-200 text-sm font-medium">Avg Flight Duration</div>
-                <div class="text-2xl font-bold text-white mt-1">${stats.averageFlightDuration}h</div>
-                <div class="text-orange-200 text-xs">Per session</div>
+                <div class="text-orange-200 text-sm font-medium">Upcoming</div>
+                <div class="text-2xl font-bold text-white mt-1">${stats.upcomingBookingsCount}</div>
+                <div class="text-orange-200 text-xs">Bookings</div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column - Personal Info & Ratings -->
             <div class="space-y-6">
-                <!-- Personal Information -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        Instructor Information
-                    </h3>
+                    <h3 class="text-lg font-semibold text-white mb-4">Instructor Info</h3>
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Full Name</span>
-                            <span class="text-white">${i.first_name || ''} ${i.last_name || ''}</span>
+                            <span class="text-gray-400">Total Flight Hours</span>
+                            <span class="text-white font-mono">${i.total_hours || '0'}</span>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Email</span>
-                            <span class="text-white">${i.email || 'Not set'}</span>
-                        </div>
-                        <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Total Hours</span>
-                            <span class="text-white">${i.total_hours || '0'}</span>
-                        </div>
-                        <div class="flex justify-between py-2">
-                            <span class="text-gray-400">Member Since</span>
-                            <span class="text-white">${i.created_at ? new Date(i.created_at).toLocaleDateString() : 'N/A'}</span>
+                         <div class="flex justify-between py-2 border-b border-gray-700">
+                            <span class="text-gray-400">Instruction Hours</span>
+                            <span class="text-white font-mono">${stats.instructionHours.toFixed(1)}</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Ratings & Certifications -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                        Ratings & Certifications
-                    </h3>
-                    <div class="space-y-3 text-sm">
+                    <h3 class="text-lg font-semibold text-white mb-4">Ratings</h3>
+                    <div class="text-sm">
                         ${i.ratings ? `
-                            <div class="py-2">
-                                <span class="text-gray-400">Current Ratings:</span>
-                                <div class="text-white mt-1">${i.ratings}</div>
+                            <div class="p-3 bg-gray-750 rounded-lg text-white">
+                                ${i.ratings}
                             </div>
-                        ` : `
-                            <div class="text-center text-gray-500 py-4">
-                                No ratings specified
-                            </div>
-                        `}
+                        ` : '<div class="text-gray-500">No ratings specified</div>'}
                     </div>
                 </div>
             </div>
 
-            <!-- Middle Column - Flight Hours & Recent Activity -->
             <div class="space-y-6">
-                <!-- Flight Hours Breakdown -->
-                <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Instruction Hours Breakdown</h3>
-                    <div class="space-y-3 text-sm">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Total Instruction Hours</span>
-                            <span class="text-white font-mono">${stats.totalHours.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Solo Supervision (P)</span>
-                            <span class="text-white font-mono">${stats.hoursByType.solo.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Dual Instruction</span>
-                            <span class="text-white font-mono">${stats.hoursByType.training.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Cross Country (NAV)</span>
-                            <span class="text-white font-mono">${stats.hoursByType.cross_country.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2">
-                            <span class="text-gray-400">Local/Pattern</span>
-                            <span class="text-white font-mono">${(stats.hoursByType.local + stats.hoursByType.pattern).toFixed(1)}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Instruction Flights -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-white">Recent Instruction Flights</h3>
-                        <span class="text-gray-400 text-sm">Last 5 flights</span>
+                        <h3 class="text-lg font-semibold text-white">Recent Activity</h3>
+                        <span class="text-gray-400 text-sm">Mixed Roles</span>
                     </div>
                     <div class="space-y-3">
                         ${flightLogs.length > 0 ?
             flightLogs.slice(0, 5).map(flight => `
                                 <div class="flex justify-between items-center p-3 bg-gray-750 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors flight-item" data-flight-id="${flight.id}">
                                     <div>
-                                        <div class="text-white font-medium">${flight.departure_iata} → ${flight.arrival_iata}</div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-xs font-bold px-1.5 py-0.5 rounded ${flight._role === 'INSTRUCTOR' ? 'bg-purple-900 text-purple-200 border border-purple-700' : 'bg-blue-900 text-blue-200 border border-blue-700'
+                }">
+                                                ${flight._role === 'INSTRUCTOR' ? 'INSTR' : 'PILOT'}
+                                            </span>
+                                            <span class="text-white font-medium">${flight.departure_icao} → ${flight.arrival_icao}</span>
+                                        </div>
                                         <div class="text-gray-400 text-sm">${new Date(flight.flight_date).toLocaleDateString()} • ${flight.flight_duration}h</div>
                                     </div>
-                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${flight.type_of_flight === 'P' ? 'bg-blue-500/20 text-blue-400' :
-                    flight.type_of_flight === 'EP / I' ? 'bg-green-500/20 text-green-400' :
-                        flight.type_of_flight === 'EP / FE' ? 'bg-purple-500/20 text-purple-400' :
-                            flight.type_of_flight === 'P / I' ? 'bg-orange-500/20 text-orange-400' :
-                                'bg-gray-500/20 text-gray-400'
-                }">
-                                        ${flight.type_of_flight}
-                                    </span>
+                                    <span class="text-gray-500 text-xs uppercase">${flight.type_of_flight}</span>
                                 </div>
                             `).join('') :
             '<div class="text-center text-gray-500 py-4">No flight records</div>'
@@ -396,29 +352,26 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
                 </div>
             </div>
 
-            <!-- Right Column - Schedule & Recent Students -->
             <div class="space-y-6">
-                <!-- Upcoming Bookings -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-white">Upcoming Bookings</h3>
-                        <span class="text-gray-400 text-sm">Next 7 days</span>
-                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Upcoming Schedule</h3>
                     <div class="space-y-3">
                         ${upcomingBookings.length > 0 ?
-            upcomingBookings.map(booking => `
-                                <div class="p-3 bg-gray-750 rounded-lg">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div class="text-white font-medium">${booking.planes.tail_number}</div>
+            upcomingBookings.slice(0, 5).map(booking => `
+                                <div class="p-3 bg-gray-750 rounded-lg border-l-4 ${booking._role === 'INSTRUCTOR' ? 'border-purple-500' : 'border-blue-500'}">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <div class="text-white font-medium">${booking.plane_details?.tail_number || 'Unknown'}</div>
                                         <span class="text-blue-400 text-sm">${new Date(booking.start_time).toLocaleDateString()}</span>
                                     </div>
-                                    <div class="text-gray-400 text-sm">
-                                        ${new Date(booking.start_time).toLocaleTimeString()} - ${new Date(booking.end_time).toLocaleTimeString()}
+                                    <div class="text-gray-400 text-xs mb-1">
+                                        ${new Date(booking.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                                        ${new Date(booking.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </div>
-                                    ${booking.students ? `
-                                    <div class="text-gray-400 text-sm mt-1">
-                                        Student: ${booking.students.first_name} ${booking.students.last_name}
-                                    </div>
+                                    ${booking.other_party ? `
+                                        <div class="text-gray-300 text-xs flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                                            w/ ${booking.other_party.first_name} ${booking.other_party.last_name}
+                                        </div>
                                     ` : ''}
                                 </div>
                             `).join('') :
@@ -427,56 +380,14 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
                     </div>
                 </div>
 
-                <!-- Recent Students -->
-                <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-white">Recent Students</h3>
-                        <span class="text-gray-400 text-sm">Last 30 days</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        ${recentStudents.length > 0 ?
-            recentStudents.map(student => `
-                                <div class="p-3 bg-gray-750 rounded-lg text-center">
-                                    <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold mx-auto mb-2">
-                                        ${student.first_name?.[0]?.toUpperCase() || 'S'}${student.last_name?.[0]?.toUpperCase() || 'T'}
-                                    </div>
-                                    <div class="text-white text-sm font-medium truncate">${student.first_name} ${student.last_name}</div>
-                                    <div class="text-gray-400 text-xs">${student.student_number}</div>
-                                </div>
-                            `).join('') :
-            '<div class="col-span-2 text-center text-gray-500 py-4">No recent students</div>'
-        }
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <h3 class="text-lg font-semibold text-white mb-4">Quick Actions</h3>
                     <div class="grid grid-cols-2 gap-3">
-                        <button class="quick-action p-3 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="add-flight">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            Add Flight Log
-                        </button>
-                        <button class="quick-action p-3 bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="schedule-booking">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                            Schedule Booking
-                        </button>
-                        <button class="quick-action p-3 bg-green-600 hover:bg-green-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="update-hours">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Update Hours
-                        </button>
-                        <button class="quick-action p-3 bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="generate-report">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Generate Report
-                        </button>
+                        <button class="quick-action p-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium" data-action="add-flight">Add Log</button>
+                        <button class="quick-action p-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-white text-sm font-medium" data-action="schedule-booking">Schedule</button>
+                        <button class="quick-action p-3 bg-green-600 hover:bg-green-500 rounded-lg text-white text-sm font-medium" data-action="update-hours">Update Hrs</button>
+
+                        <button class="quick-action p-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-white text-sm font-medium" data-action="settle-account">Settle Debt</button>
                     </div>
                 </div>
             </div>
@@ -487,288 +398,208 @@ function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, rece
 function renderErrorState(instructorId) {
     document.getElementById('main-content').innerHTML = `
         <div class="flex items-center mb-4">
-            <button id="back-button" class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
-                ← Back
-            </button>
+            <button id="back-button" class="text-blue-400">← Back</button>
         </div>
         <div class="text-center text-gray-500 py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-            </svg>
-            <h3 class="text-lg font-medium text-gray-300 mb-2">Error Loading Profile</h3>
-            <p class="text-gray-500">Unable to load instructor profile. Please try again.</p>
-            <button id="retry-btn" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-                Retry
-            </button>
+            <h3 class="text-lg font-medium text-gray-300">Error Loading Profile</h3>
+            <button id="retry-btn" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
         </div>
     `;
-
     document.getElementById('back-button').addEventListener('click', goBack);
     document.getElementById('retry-btn').addEventListener('click', () => renderInstructorProfile(instructorId));
 }
 
-function setupInstructorDetailsEventListeners(instructorId) {
-    // Back button
+function setupInstructorDetailsEventListeners(instructorId, userId, allLogs) {
     document.getElementById('back-button').addEventListener('click', goBack);
 
-    // Edit profile
-    document.getElementById('edit-profile-btn').addEventListener('click', () => {
-        editInstructor(instructorId);
-    });
+    const editBtn = document.getElementById('edit-profile-btn');
+    if (editBtn) {
+        editBtn.addEventListener('click', () => editInstructor(instructorId));
+    }
 
-    // Flight item clicks
     document.addEventListener('click', (e) => {
         const flightItem = e.target.closest('.flight-item');
         if (flightItem) {
-            const flightId = flightItem.getAttribute('data-flight-id');
-            handleFlightClick(flightId);
+            handleFlightClick(flightItem.getAttribute('data-flight-id'));
         }
     });
 
-    // Quick actions
     document.querySelectorAll('.quick-action').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = e.target.closest('.quick-action').getAttribute('data-action');
-            handleQuickAction(action, instructorId);
+            handleQuickAction(action, instructorId, userId);
         });
     });
 
-    // View all flights
-    const viewAllFlightsBtn = document.querySelector('.view-all-flights');
-    if (viewAllFlightsBtn) {
-        viewAllFlightsBtn.addEventListener('click', () => {
-            loadFlightHistory(instructorId);
+    const viewAllBtn = document.querySelector('.view-all-flights');
+    if (viewAllBtn) {
+        viewAllBtn.addEventListener('click', () => {
+            showToast('Full flight history modal coming soon!', 'info');
+            // Future: Implement a modal that accepts the `allLogs` array we passed in
         });
     }
 }
 
-async function loadFlightHistory(instructorId) {
-    try {
-        const { data: flightLogs, error } = await supabase
-            .from('flight_logs')
-            .select('*')
-            .eq('instructor_uuid', instructorId) // FIXED: using instructor_uuid
-            .order('flight_date', { ascending: false });
-
-        if (error) throw error;
-
-        showAllFlightsModal(flightLogs);
-    } catch (error) {
-        console.error('Error loading flight history:', error);
-        showToast('Error loading flight history', 'error');
-    }
-}
-
-function showAllFlightsModal(flightLogs) {
-    // Implementation for showing all flights in a modal
-    showToast('All flights modal to be implemented', 'info');
-}
-
-async function handleQuickAction(action, instructorId) {
+async function handleQuickAction(action, instructorId, userId) {
     let currentModal = null;
 
     switch (action) {
         case 'add-flight':
             currentModal = new AddFlightLogModal();
             currentModal.init().then(() => {
+                // If they are an instructor, we default them as the Instructor in the log? 
+                // Or as the Pilot? Usually Add Log implies "I flew", so we pass userId as pilotId.
+                // But if they are logging a lesson, they might be the instructor.
+                // For now, let's pass them as pilotId and let them change it in the form if needed.
                 currentModal.show({
-                    instructorId: instructorId
+                    pilotId: userId, // Auto-select them as pilot
+                    peopleData: cachedStudents
                 });
-
                 currentModal.onSuccess(() => {
                     renderInstructorProfile(instructorId);
                     cleanupModal();
                 });
-
-                currentModal.onClose(() => {
-                    cleanupModal();
-                });
+                currentModal.onClose(() => cleanupModal());
             });
             break;
 
         case 'schedule-booking':
-            setTimeout(() => {
-                // ✅ This now uses the updated createAddBookingModal function
-                createAddBookingModal(instructorId, 'instructor');
-            }, 100);
+            setTimeout(() => createAddBookingModal(instructorId), 100);
             break;
 
         case 'update-hours':
-            await updateInstructorHours(instructorId);
+            await updateInstructorHours(instructorId, userId);
             break;
+        case 'settle-account':
+            if (!settleDebtModal) {
+                settleDebtModal = new SettleDebtModal();
+                await settleDebtModal.init();
+            }
 
-        case 'generate-report':
-            showToast('Report generation feature coming soon...', 'info');
+            // Show modal and pass the instructorId to pre-fill the search
+            settleDebtModal.show(() => {
+                // Optional: Refresh profile after payment to update any stats
+                renderInstructorProfile(instructorId);
+            }, instructorId);
             break;
-
-        default:
-            console.warn('Unknown action:', action);
     }
 
     function cleanupModal() {
-        if (currentModal && typeof currentModal.destroy === 'function') {
-            currentModal.destroy();
-        }
+        if (currentModal && typeof currentModal.destroy === 'function') currentModal.destroy();
         currentModal = null;
     }
 }
 
-async function updateInstructorHours(instructorId) {
+async function updateInstructorHours(instructorId, userId) {
     try {
-        // Calculate total hours from flight logs - FIXED: using instructor_uuid
-        const { data: flightLogs, error } = await supabase
-            .from('flight_logs')
-            .select('flight_duration')
-            .eq('instructor_uuid', instructorId);
+        if (!userId) throw new Error("User ID not found for this instructor");
+
+        // Calculate total from ALL logs (Pilot + Instructor) or just Pilot? 
+        // Usually "Total Hours" means total experience.
+        // We need to fetch ALL logs for this calculation if not already done, 
+        // but we can trust the 'get_flight_logs' + 'get_flight_logs_by_pilot' sum we did earlier
+        // However, for safety, let's just re-calculate based on what the DB says for 'pilot' logs
+        // because "Total Hours" in aviation usually implies time at controls (Pilot + Dual Received).
+        // Time strictly as Instructor (without touching controls) might be counted differently, 
+        // but typically an Instructor is PIC.
+
+        const { data: pilotLogs, error } = await supabase
+            .schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId });
 
         if (error) throw error;
 
-        const totalHours = flightLogs.reduce((sum, flight) => sum + parseFloat(flight.flight_duration || 0), 0);
+        // Sum hours where they were the PILOT (PIC or Dual)
+        const totalHours = pilotLogs.reduce((sum, flight) => sum + parseFloat(flight.flight_duration || 0), 0);
 
-        // Update instructor record
         const { error: updateError } = await supabase
-            .from('instructors')
-            .update({ total_hours: totalHours })
-            .eq('id', instructorId);
+            .schema('api').rpc('update_instructor', {
+                instructor_uuid: instructorId,
+                payload: { total_hours: totalHours }
+            });
 
         if (updateError) throw updateError;
-
-        showToast(`Instructor hours updated to ${totalHours.toFixed(1)}`, 'success');
+        showToast(`Hours updated to ${totalHours.toFixed(1)}`, 'success');
         await renderInstructorProfile(instructorId);
+
     } catch (error) {
-        console.error('Error updating instructor hours:', error);
-        showToast('Error updating instructor hours', 'error');
+        console.error('Error updating hours:', error);
+        showToast('Error updating hours: ' + error.message, 'error');
     }
 }
 
-function createAddBookingModal(instructorId, role) {
-    console.log('🛠️ Creating FRESH AddBookingModal instance for instructor...');
-
+function createAddBookingModal(instructorId) {
     const modal = new AddBookingModal();
-
-    modal.onSuccess(async (newBooking) => {
-        console.log('✅ Booking created successfully:', newBooking);
-        showToast('Booking created successfully!', 'success');
+    modal.onSuccess(async () => {
+        showToast('Booking created!', 'success');
         await renderInstructorProfile(instructorId);
         closeActiveModal();
     });
-
-    modal.onClose(() => {
-        console.log('📝 AddBookingModal closed');
-        closeActiveModal();
-    });
-
+    modal.onClose(() => closeActiveModal());
     currentBookingModal = modal;
 
-    // ✅ CHANGED: Use personId instead of instructorId
-    modal.show({ personId: instructorId }).catch(error => {
-        console.error('Failed to show AddBookingModal:', error);
-        showToast('Error opening booking form: ' + error.message, 'error');
-    });
+    // Pass the instructor's person ID. The modal handles ID resolution internally usually, 
+    // or we can pass the resolved ID if the modal supports it. 
+    // Based on previous code, it expects personId.
+    modal.show({ personId: instructorId, preloadedPeople: cachedStudents });
 }
 
 function closeActiveModal() {
-    console.log('❌ closeActiveModal called');
-
     if (window.isClosingModal) return;
     window.isClosingModal = true;
-
-    if (modalCleanupTimeout) {
-        clearTimeout(modalCleanupTimeout);
-        modalCleanupTimeout = null;
-    }
+    if (modalCleanupTimeout) clearTimeout(modalCleanupTimeout);
 
     if (currentBookingModal) {
-        const modalToClose = currentBookingModal;
+        if (typeof currentBookingModal.close === 'function') currentBookingModal.close();
+        else if (typeof currentBookingModal.destroy === 'function') currentBookingModal.destroy();
         currentBookingModal = null;
-
-        if (typeof modalToClose.close === 'function') {
-            modalToClose.close();
-        } else if (typeof modalToClose.hide === 'function') {
-            modalToClose.hide();
-        } else if (typeof modalToClose.destroy === 'function') {
-            modalToClose.destroy();
-        } else if (typeof modalToClose.cleanup === 'function') {
-            modalToClose.cleanup();
-        }
     }
-
-    setTimeout(() => {
-        window.isClosingModal = false;
-    }, 100);
+    setTimeout(() => { window.isClosingModal = false; }, 100);
 }
 
 function goBack() {
-    console.log('🔙 Going back, cleaning up modals...');
-
     closeActiveModal();
-
-    window.history.pushState({}, '', '#instructors');
-
     window.dispatchEvent(new CustomEvent('navigate', {
-        detail: { page: 'instructors' }
+        detail: { page: returnToPage }
     }));
 }
 
 export function cleanupInstructorDetailsPage() {
-    console.log('🧹 Cleaning up instructor details page...');
-
     closeActiveModal();
-
-    if (modalCleanupTimeout) {
-        clearTimeout(modalCleanupTimeout);
-        modalCleanupTimeout = null;
-    }
-
     currentInstructorId = null;
+    cachedStudents = [];
+
+    // <--- ADD THIS --->
+    if (settleDebtModal) {
+        if (typeof settleDebtModal.hide === 'function') settleDebtModal.hide();
+        settleDebtModal = null;
+    }
 }
 
 function showLoading(show) {
     const existingLoader = document.getElementById('loading-overlay');
-    if (show) {
-        if (!existingLoader) {
-            const loader = document.createElement('div');
-            loader.id = 'loading-overlay';
-            loader.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
-            loader.innerHTML = `
-                <div class="bg-gray-800 rounded-xl p-6 flex items-center gap-3">
-                    <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-white">Loading...</span>
-                </div>
-            `;
-            document.body.appendChild(loader);
-        }
-    } else {
-        if (existingLoader) {
-            existingLoader.remove();
-        }
+    if (show && !existingLoader) {
+        const loader = document.createElement('div');
+        loader.id = 'loading-overlay';
+        loader.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        loader.innerHTML = `<div class="bg-gray-800 rounded-xl p-6 text-white">Loading...</div>`;
+        document.body.appendChild(loader);
+    } else if (!show && existingLoader) {
+        existingLoader.remove();
     }
 }
 
 async function handleFlightClick(flightId) {
     try {
-        showToast('Loading flight details...', 'info');
-
         const { data: flightData, error } = await supabase
-            .from('flight_logs')
-            .select('*')
-            .eq('id', flightId)
-            .single();
-
+            .schema('api').rpc('get_flight_log_by_id', { log_uuid: flightId }).single();
         if (error) throw error;
-
-        if (flightDetailsModal && flightData) {
-            flightDetailsModal.show(flightData);
-        } else {
-            showToast('Error loading flight details', 'error');
-        }
+        if (flightDetailsModal && flightData) flightDetailsModal.show(flightData);
     } catch (error) {
-        console.error('Error loading flight details:', error);
+        console.error('Flight details error:', error);
         showToast('Error loading flight details', 'error');
     }
 }
 
-// Export the main function
 export default {
     loadInstructorDetailsPage,
     setupInstructorDetailsNavigation,

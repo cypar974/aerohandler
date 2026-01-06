@@ -1,11 +1,16 @@
 // ./js/pages/instructors.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
-import { loadInstructorDetailsPage } from "./instructordetails.js";
+import { setupPersonAutocomplete } from "../components/autocomplete.js";
+import { InstructorModal } from "../modals/InstructorModal.js";
+// --- DEMO MODE: PERMISSIONS FLAG ---
+const canEdit = true;
+// -----------------------------------
 
 let instructorsData = [];
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "first_name", query: "" };
+let searchAutocomplete = null; // Reference to the autocomplete instance
 let tableStateBackup = {
     instructorsData: [],
     currentPage: 1,
@@ -13,10 +18,13 @@ let tableStateBackup = {
     searchState: { column: "first_name", query: "" }
 };
 
+let instructorModal = null;
+
 let currentPage = 1;
 const rowsPerPage = 10;
 
 export async function loadInstructorsPage() {
+    instructorModal = new InstructorModal();
     document.getElementById("main-content").innerHTML = /* html */ `
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
             <div>
@@ -31,8 +39,9 @@ export async function loadInstructorsPage() {
                         <option value="ratings">Ratings</option>
                         <option value="total_hours">Hours</option>
                     </select>
-                    <div class="relative">
-                        <input type="text" id="search-box" placeholder="Search instructors..." class="pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full lg:w-64">
+                    <div class="relative w-full lg:w-64">
+                        <input type="text" id="search-box" placeholder="Search instructors..." class="pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full">
+                        <input type="hidden" id="search-instructor-id">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -40,16 +49,17 @@ export async function loadInstructorsPage() {
                         </div>
                     </div>
                 </div>
+                ${canEdit ? `
                 <button id="add-instructor-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors duration-200 flex items-center justify-center gap-2 font-medium text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
                     Add Instructor
                 </button>
+                ` : ''}
             </div>
         </div>
 
-        <!-- Stats Overview -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
                 <div class="flex items-center justify-between">
@@ -105,7 +115,6 @@ export async function loadInstructorsPage() {
             </div>
         </div>
 
-        <!-- Table Container -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-white">
@@ -148,13 +157,11 @@ export async function loadInstructorsPage() {
                 </table>
             </div>
             
-            <!-- Loading State -->
             <div id="loading-state" class="hidden p-8 text-center">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
                 <p class="text-gray-400 mt-2">Loading instructors...</p>
             </div>
 
-            <!-- Empty State -->
             <div id="empty-state" class="hidden p-8 text-center">
                 <svg class="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -168,54 +175,6 @@ export async function loadInstructorsPage() {
 
             <div id="pagination" class="flex justify-between items-center p-4 border-t border-gray-700"></div>
         </div>
-
-        <!-- Add/Edit Instructor Modal -->
-        <div id="instructor-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
-            <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold" id="modal-title">Add New Instructor</h2>
-                    <button id="modal-close-btn" class="text-gray-400 hover:text-white transition-colors duration-200">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                <form id="add-instructor-form" class="space-y-4">
-                    <input type="hidden" id="instructor-id">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">First Name *</label>
-                        <input type="text" id="instructor-first-name" placeholder="Enter first name" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Last Name *</label>
-                        <input type="text" id="instructor-last-name" placeholder="Enter last name" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Email Address *</label>
-                        <input type="email" id="instructor-email" placeholder="Enter email address" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Ratings & Certifications</label>
-                        <input type="text" id="instructor-ratings" placeholder="e.g., CFI, CFII, MEI, ATP" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
-                        <p class="text-xs text-gray-400 mt-1">Separate multiple ratings with commas</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Total Flight Hours</label>
-                        <input type="number" id="instructor-total-hours" placeholder="Enter total hours" step="0.1" min="0" class="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
-                    </div>
-                    <div class="flex justify-end space-x-3 pt-4">
-                        <button type="button" id="cancel-btn" class="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200 font-medium">Cancel</button>
-                        <button type="submit" id="save-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors duration-200 font-medium flex items-center gap-2">
-                            <span>Save Instructor</span>
-                            <svg id="save-spinner" class="w-4 h-4 hidden animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
     `;
 
     await fetchInstructors();
@@ -223,10 +182,16 @@ export async function loadInstructorsPage() {
 }
 
 function setupEventListeners() {
-    document.getElementById("add-instructor-btn").addEventListener("click", () => openModal());
-    document.getElementById("empty-state-add-btn")?.addEventListener("click", () => openModal());
-    document.getElementById("modal-close-btn").addEventListener("click", () => closeModal());
-    document.getElementById("cancel-btn").addEventListener("click", () => closeModal());
+    if (document.getElementById("add-instructor-btn")) {
+        document.getElementById("add-instructor-btn").addEventListener("click", () => {
+            instructorModal.show(null, fetchInstructors);
+        });
+    }
+    if (document.getElementById("empty-state-add-btn")) {
+        document.getElementById("empty-state-add-btn").addEventListener("click", () => {
+            instructorModal.show(null, fetchInstructors);
+        });
+    }
 
     document.querySelectorAll("th[data-column]").forEach(th => {
         th.addEventListener("click", () => {
@@ -235,11 +200,10 @@ function setupEventListeners() {
         });
     });
 
-    document.getElementById("add-instructor-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        await saveInstructor();
-    });
 
+    // Note: The Autocomplete component handles its own input events,
+    // but we keep this listener for standard text filtering (e.g. backspace)
+    // or if the user switches the column to something other than Name.
     document.getElementById("search-box").addEventListener("input", e => {
         searchState.query = e.target.value.toLowerCase();
         currentPage = 1;
@@ -252,49 +216,60 @@ function setupEventListeners() {
         renderTable();
     });
 
-    // Close modal on backdrop click
-    document.getElementById("instructor-modal").addEventListener("click", (e) => {
-        if (e.target.id === "instructor-modal") closeModal();
+    document.addEventListener('instructorSaved', () => {
+        fetchInstructors();
     });
+
 }
 
-function openModal(instructor = null) {
-    const modal = document.getElementById("instructor-modal");
-    const title = document.getElementById("modal-title");
-    const form = document.getElementById("add-instructor-form");
-
-    if (instructor) {
-        title.textContent = "Edit Instructor";
-        document.getElementById("instructor-id").value = instructor.id;
-        document.getElementById("instructor-first-name").value = instructor.first_name || "";
-        document.getElementById("instructor-last-name").value = instructor.last_name || "";
-        document.getElementById("instructor-email").value = instructor.email || "";
-        document.getElementById("instructor-ratings").value = instructor.ratings || "";
-        document.getElementById("instructor-total-hours").value = instructor.total_hours || "";
-    } else {
-        title.textContent = "Add New Instructor";
-        form.reset();
-        document.getElementById("instructor-id").value = "";
+function initSearchAutocomplete() {
+    // If an instance exists, destroy it to avoid duplicates
+    if (searchAutocomplete) {
+        searchAutocomplete.destroy();
     }
 
-    modal.classList.remove("hidden");
-    document.getElementById("instructor-first-name").focus();
-}
+    // Ensure data has the 'type' field for the filter to work correctly
+    // The RPC might not return 'type' if it's strictly the instructors table,
+    // so we inject it here.
+    const autocompleteData = instructorsData.map(i => ({
+        ...i,
+        type: 'instructor'
+    }));
 
-function closeModal() {
-    document.getElementById("instructor-modal").classList.add("hidden");
+    searchAutocomplete = setupPersonAutocomplete({
+        inputId: 'search-box',
+        hiddenId: 'search-instructor-id',
+        peopleData: autocompleteData,
+        roleFilter: 'instructors',
+        onSelect: (selected) => {
+            // When an instructor is selected from the dropdown:
+            // 1. Force the search column to 'Name' (since autocomplete is name-based)
+            document.getElementById("search-column").value = "first_name";
+            searchState.column = "first_name";
+
+            // 2. Set the query to the selected name and filter
+            searchState.query = selected.value.toLowerCase();
+            currentPage = 1;
+            renderTable();
+        }
+    });
 }
 
 async function fetchInstructors() {
     showLoadingState(true);
 
-    const { data, error } = await supabase
-        .from("instructors")
-        .select("*")
-        .order("created_at", { ascending: false });
+    // REFACTOR: Use RPC instead of direct select
+    const { data, error } = await supabase.schema('api').rpc('get_instructors');
 
     if (!error) {
-        instructorsData = data;
+        // Sort explicitly by created_at desc as in the original code
+        instructorsData = data.sort((a, b) =>
+            new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        // Initialize the autocomplete with the fresh data
+        initSearchAutocomplete();
+
         updateStatsOverview();
         renderTable();
     } else {
@@ -324,15 +299,25 @@ function updateStatsOverview() {
 }
 
 async function updatePendingPaymentsStats() {
-    const { data, error } = await supabase
-        .from('payments_payable')
-        .select('amount')
-        .eq('payee_type', 'instructor')
-        .eq('status', 'pending');
+    try {
+        // FIXED: Use the API function instead of direct table access
+        const { data, error } = await supabase.schema('api').rpc('get_pending_transactions');
 
-    if (!error && data) {
-        const totalPending = data.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
-        document.getElementById("pending-payments").textContent = `$${totalPending.toFixed(2)}`;
+        if (error) throw error;
+
+        if (data) {
+            // Filter the results in JavaScript (Client-side)
+            // We want: direction = 'payable' AND type = 'instructor'
+            const totalPending = data
+                .filter(t => t.transaction_direction === 'payable' && t.transaction_type === 'instructor')
+                .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+
+            document.getElementById("pending-payments").textContent = `$${totalPending.toFixed(2)}`;
+        }
+    } catch (error) {
+        console.error('Error fetching pending payments:', error);
+        // Optional: show $0.00 or error state
+        document.getElementById("pending-payments").textContent = "$0.00";
     }
 }
 
@@ -429,11 +414,13 @@ function renderTable() {
                 </td>
                 <td class="p-4">
                     <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        ${canEdit ? `
                         <button class="edit-instructor-btn p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded-lg transition-colors duration-200" data-id="${instructor.id}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                         </button>
+                        ` : ''}
                         <button class="view-instructor-btn p-2 text-green-400 hover:text-green-300 hover:bg-green-500/20 rounded-lg transition-colors duration-200" data-id="${instructor.id}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -455,14 +442,18 @@ function renderTable() {
         });
     });
 
-    tbody.querySelectorAll('.edit-instructor-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const instructorId = btn.getAttribute('data-id');
-            const instructor = instructorsData.find(i => i.id === instructorId);
-            if (instructor) openModal(instructor);
+    if (canEdit) {
+        tbody.querySelectorAll('.edit-instructor-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const instructorId = btn.getAttribute('data-id');
+                const instructor = instructorsData.find(i => i.id === instructorId);
+
+                // CHANGE THIS: Use the class instance
+                if (instructor) instructorModal.show(instructor, fetchInstructors);
+            });
         });
-    });
+    }
 
     // Row click to view profile
     tbody.querySelectorAll('tr').forEach(row => {
@@ -474,65 +465,6 @@ function renderTable() {
 
     updateSortArrows();
     renderPagination(totalPages);
-}
-
-async function saveInstructor() {
-    const saveBtn = document.getElementById("save-btn");
-    const spinner = document.getElementById("save-spinner");
-    const instructorId = document.getElementById("instructor-id").value;
-
-    const instructorData = {
-        first_name: document.getElementById("instructor-first-name").value.trim(),
-        last_name: document.getElementById("instructor-last-name").value.trim(),
-        email: document.getElementById("instructor-email").value.trim(),
-        ratings: document.getElementById("instructor-ratings").value.trim(),
-        total_hours: parseFloat(document.getElementById("instructor-total-hours").value) || 0
-    };
-
-    // Validation
-    if (!instructorData.first_name || !instructorData.last_name || !instructorData.email) {
-        showToast("Please fill in all required fields", "error");
-        return;
-    }
-
-    // Show loading state
-    saveBtn.disabled = true;
-    spinner.classList.remove("hidden");
-    saveBtn.innerHTML = `<span>Saving...</span>${spinner.outerHTML}`;
-
-    try {
-        let error;
-        if (instructorId) {
-            // Update existing instructor
-            const { error: updateError } = await supabase
-                .from("instructors")
-                .update(instructorData)
-                .eq("id", instructorId);
-            error = updateError;
-        } else {
-            // Insert new instructor
-            const { error: insertError } = await supabase
-                .from("instructors")
-                .insert([instructorData]);
-            error = insertError;
-        }
-
-        if (!error) {
-            showToast(`Instructor ${instructorId ? 'updated' : 'added'} successfully!`, "success");
-            closeModal();
-            await fetchInstructors();
-        } else {
-            throw error;
-        }
-    } catch (error) {
-        console.error('Error saving instructor:', error);
-        showToast(`Error ${instructorId ? 'updating' : 'adding'} instructor: ${error.message}`, "error");
-    } finally {
-        // Reset button state
-        saveBtn.disabled = false;
-        spinner.classList.add("hidden");
-        saveBtn.innerHTML = `<span>Save Instructor</span>${spinner.outerHTML}`;
-    }
 }
 
 function renderPagination(totalPages) {
@@ -644,14 +576,19 @@ function viewInstructorProfile(instructorId) {
     // Use the new instructor details page
     window.location.hash = `#instructor/${instructorId}`;
     window.dispatchEvent(new CustomEvent('navigate', {
-        detail: { page: 'instructordetails', instructorId }
+        detail: {
+            page: 'instructordetails',
+            instructorId,
+            backPage: 'instructors' // CHANGE: Add this line
+        }
     }));
 }
 
 export function editInstructor(instructorId) {
     const instructor = instructorsData.find(i => i.id === instructorId);
     if (instructor) {
-        openModal(instructor);
+        if (!instructorModal) instructorModal = new InstructorModal();
+        instructorModal.show(instructor, fetchInstructors);
     }
 }
 

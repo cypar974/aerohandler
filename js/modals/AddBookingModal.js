@@ -3,8 +3,8 @@ import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { CustomTimePicker } from "../components/customTimePicker.js";
 import { showToast } from "../components/showToast.js";
-import { DataSources } from "../components/data-sources.js";
-import { Autocomplete } from "../components/autocomplete.js";
+import { setupPersonAutocomplete } from "../components/autocomplete.js";
+import { getMembers } from "../utils/memberData.js";
 
 export class AddBookingModal {
     constructor(containerElement = null) {
@@ -12,23 +12,28 @@ export class AddBookingModal {
         this.modal = null;
         this.isOpen = false;
         this.isInitialized = false;
+
+        // Callbacks
         this.onCloseCallback = null;
         this.onSuccessCallback = null;
+
+        // Picker Instances
         this.datePickerInstance = null;
         this.timePickerInstances = {
             start: null,
             end: null
         };
+
+        // Data Storage
         this.planes = [];
-        this.students = [];
-        this.instructors = [];
-        this.combinedPersonnel = [];
+        this.combinedPersonnel = []; // Raw data from  (Person IDs)
+        this.personToUserMap = {};   // Map: PersonUUID -> UserUUID (Auth IDs)
         this.currentBookingType = 'instruction'; // 'instruction' or 'regular'
 
-        // Add this to track autocomplete instances
+        // Autocomplete Management
         this.autocompleteInstances = {};
 
-        // Bind methods to ensure proper context
+        // Bind methods
         this.handleModalClick = this.handleModalClick.bind(this);
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleFormSubmit = this.handleFormSubmit.bind(this);
@@ -36,11 +41,11 @@ export class AddBookingModal {
         this.handleTabSwitch = this.handleTabSwitch.bind(this);
     }
 
+    /**
+     * Initialize data fetching and basic setup.
+     */
     async init() {
-        if (this.isInitialized) {
-            console.log('AddBookingModal already initialized');
-            return;
-        }
+        if (this.isInitialized) return;
 
         try {
             await this.fetchData();
@@ -50,35 +55,58 @@ export class AddBookingModal {
             console.log('AddBookingModal initialized successfully');
         } catch (error) {
             console.error('Failed to initialize AddBookingModal:', error);
-            throw error;
+            showToast('Failed to initialize booking form', 'error');
         }
     }
 
+    /**
+     * Fetches Planes and User Mappings.
+     * Crucial: Maps Person IDs (from View) to User IDs (from Auth Table).
+     */
     async fetchData() {
         try {
-            const [planesResponse, combinedPersonnel] = await Promise.all([
-                supabase.from("planes").select("id, tail_number, model"),
-                DataSources.loadCombined() // This would load both students and instructors
+            console.log("🔄 Fetching modal data...");
+            const roles = ['student', 'instructor', 'regular_pilot', 'maintenance_technician', 'other_person'];
+
+            // Fetch planes, member names, and mapping data in parallel
+            const [planesResponse, membersResponse, ...userResponses] = await Promise.all([
+                supabase.schema('api').rpc('get_planes'),
+                getMembers(),
+                ...roles.map(role => supabase.schema('api').rpc('get_users_by_role', { user_role: role }))
             ]);
 
             if (planesResponse.error) throw planesResponse.error;
+            if (membersResponse.error) throw membersResponse.error;
 
             this.planes = planesResponse.data || [];
-            this.combinedPersonnel = combinedPersonnel;
+            this.combinedPersonnel = membersResponse.data || [];
 
-            // Split combined data back into students and instructors
-            this.students = combinedPersonnel.filter(p => p.type === 'student');
-            this.instructors = combinedPersonnel.filter(p => p.type === 'instructor');
+            // Reset and Rebuild Map
+            this.personToUserMap = {};
+            let mapCount = 0;
+
+            userResponses.forEach(response => {
+                if (response.data) {
+                    response.data.forEach(u => {
+                        // Map: Person Table ID -> Users Table ID (Auth)
+                        // This allows us to convert the Autocomplete ID (Person) to the FK ID (User)
+                        if (u.person_id && u.id) {
+                            this.personToUserMap[u.person_id] = u.id;
+                            mapCount++;
+                        }
+                    });
+                }
+            });
+
+            console.log(`✅ Data loaded. Mapped ${mapCount} users to persons.`);
 
         } catch (error) {
-            console.error('Error fetching modal data:', error);
+            console.error('❌ Error fetching modal data:', error);
             showToast('Error loading form data: ' + error.message, 'error');
         }
     }
 
     render() {
-        // ✅ ALWAYS CREATE A NEW MODAL - NO REUSING
-        // Remove existing modal if present
         if (this.modal && document.body.contains(this.modal)) {
             document.body.removeChild(this.modal);
         }
@@ -88,19 +116,16 @@ export class AddBookingModal {
         this.modal.className = "hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm";
         this.modal.innerHTML = this.getModalHTML();
         document.body.appendChild(this.modal);
-        console.log('✅ Modal DOM created fresh');
     }
 
     getModalHTML() {
         return `
             <div class="bg-gray-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] flex flex-col">
-                <!-- Modal Header -->
                 <div class="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700">
                     <div class="flex items-center space-x-3">
                         <div class="p-2 bg-blue-600 rounded-lg">
                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                             </svg>
                         </div>
                         <div>
@@ -115,7 +140,6 @@ export class AddBookingModal {
                     </button>
                 </div>
 
-                <!-- Booking Type Tabs -->
                 <div class="flex-shrink-0 border-b border-gray-700">
                     <div class="flex p-4 space-x-1">
                         <button type="button" id="tab-instruction"
@@ -129,149 +153,90 @@ export class AddBookingModal {
                     </div>
                 </div>
 
-                <!-- Modal Body -->
                 <div class="flex-1 overflow-y-auto">
                     <div class="p-6">
                         <form id="booking-form" class="space-y-6">
-                            <!-- Schedule Information Section -->
                             <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
                                 <h2 class="text-xl font-semibold mb-4 text-blue-400">Schedule Information</h2>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label class="block mb-2 text-sm font-medium text-gray-300">Booking Date *</label>
-                                        <input type="date" id="booking-date"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            required>
+                                        <input type="date" id="booking-date" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" required>
                                     </div>
                                     <div>
                                         <label class="block mb-2 text-sm font-medium text-gray-300">Start Time *</label>
-                                        <input type="time" id="booking-start"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            required>
+                                        <input type="time" id="booking-start" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" required>
                                     </div>
                                     <div>
                                         <label class="block mb-2 text-sm font-medium text-gray-300">End Time *</label>
-                                        <input type="time" id="booking-end"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            required>
+                                        <input type="time" id="booking-end" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" required>
                                     </div>
                                     <div class="md:col-span-3">
                                         <label class="block mb-2 text-sm font-medium text-gray-300">Calculated Duration</label>
-                                        <div id="booking-duration-display"
-                                            class="p-3 bg-gray-700 rounded border border-gray-600 text-yellow-400 font-mono text-lg">
-                                            --:--
-                                        </div>
-                                        <small class="text-gray-400">Automatically calculated from start and end times</small>
+                                        <div id="booking-duration-display" class="p-3 bg-gray-700 rounded border border-gray-600 text-yellow-400 font-mono text-lg">--:--</div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Aircraft Section -->
                             <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
                                 <h2 class="text-xl font-semibold mb-4 text-green-400">Aircraft</h2>
-                                <div class="grid grid-cols-1 gap-4">
-                                    <div>
-                                        <label class="block mb-2 text-sm font-medium text-gray-300">Plane *</label>
-                                        <select id="booking-plane"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            required>
-                                            <option value="">Select Plane</option>
-                                        </select>
-                                    </div>
+                                <div>
+                                    <label class="block mb-2 text-sm font-medium text-gray-300">Plane *</label>
+                                    <select id="booking-plane" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" required>
+                                        <option value="">Select Plane</option>
+                                    </select>
                                 </div>
                             </div>
 
-                            <!-- Personnel Section - Instruction Type -->
                             <div id="personnel-instruction" class="bg-gray-800 p-6 rounded-xl border border-gray-700">
                                 <h2 class="text-xl font-semibold mb-4 text-purple-400">Personnel - Instruction</h2>
                                 <div class="space-y-4">
                                     <div class="relative">
                                         <label class="block mb-2 text-sm font-medium text-gray-300">Instructor *</label>
-                                        <input type="text" id="instructor-name"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            placeholder="Start typing instructor name..." required autocomplete="off">
+                                        <input type="text" id="instructor-name" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Type instructor name..." required autocomplete="off">
                                         <input type="hidden" id="instructor-uuid">
-                                        <ul id="instructor-suggestions"
-                                            class="absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg hidden z-50 max-h-60 overflow-y-auto">
-                                        </ul>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div class="relative">
                                             <label class="block mb-2 text-sm font-medium text-gray-300">Student 1 *</label>
-                                            <input type="text" id="student1-name"
-                                                class="student-input w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                placeholder="Start typing student name..." required autocomplete="off">
+                                            <input type="text" id="student1-name" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Type student name..." required autocomplete="off">
                                             <input type="hidden" id="student1-uuid">
-                                            <ul
-                                                class="autocomplete-suggestions absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg hidden z-50 max-h-60 overflow-y-auto">
-                                            </ul>
                                         </div>
                                         <div class="relative">
                                             <label class="block mb-2 text-sm font-medium text-gray-300">Student 2</label>
-                                            <input type="text" id="student2-name"
-                                                class="student-input w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                placeholder="Start typing student name..." autocomplete="off">
+                                            <input type="text" id="student2-name" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Type student name..." autocomplete="off">
                                             <input type="hidden" id="student2-uuid">
-                                            <ul
-                                                class="autocomplete-suggestions absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg hidden z-50 max-h-60 overflow-y-auto">
-                                            </ul>
                                         </div>
                                         <div class="relative">
                                             <label class="block mb-2 text-sm font-medium text-gray-300">Student 3</label>
-                                            <input type="text" id="student3-name"
-                                                class="student-input w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                placeholder="Start typing student name..." autocomplete="off">
+                                            <input type="text" id="student3-name" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Type student name..." autocomplete="off">
                                             <input type="hidden" id="student3-uuid">
-                                            <ul
-                                                class="autocomplete-suggestions absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg hidden z-50 max-h-60 overflow-y-auto">
-                                            </ul>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Personnel Section - Regular Type -->
                             <div id="personnel-regular" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hidden">
                                 <h2 class="text-xl font-semibold mb-4 text-purple-400">Personnel - Regular</h2>
-                                <div class="space-y-4">
-                                    <div class="relative">
-                                        <label class="block mb-2 text-sm font-medium text-gray-300">Pilot *</label>
-                                        <input type="text" id="pilot-name"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            placeholder="Start typing pilot name..." autocomplete="off">
-                                        <input type="hidden" id="pilot-uuid">
-                                        <ul id="pilot-suggestions"
-                                            class="absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg hidden z-50 max-h-60 overflow-y-auto">
-                                        </ul>
-                                    </div>
+                                <div class="relative">
+                                    <label class="block mb-2 text-sm font-medium text-gray-300">Pilot *</label>
+                                    <input type="text" id="pilot-name" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Type pilot name..." autocomplete="off">
+                                    <input type="hidden" id="pilot-uuid">
                                 </div>
                             </div>
 
-                            <!-- Flight Details Section -->
                             <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
                                 <h2 class="text-xl font-semibold mb-4 text-orange-400">Flight Details</h2>
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block mb-2 text-sm font-medium text-gray-300">Flight Description</label>
-                                        <textarea id="booking-desc" rows="3"
-                                            class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            placeholder="Enter flight purpose, training objectives, or special instructions..."></textarea>
-                                    </div>
-                                </div>
+                                <label class="block mb-2 text-sm font-medium text-gray-300">Flight Description</label>
+                                <textarea id="booking-desc" rows="3" class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white" placeholder="Enter purpose or instructions..."></textarea>
                             </div>
 
-                            <!-- Validation Messages -->
                             <div id="validation-messages" class="hidden p-4 bg-red-900/50 border border-red-700 rounded-lg">
                                 <div class="flex items-center space-x-2 text-red-300">
-                                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
                                     <span id="validation-text" class="text-sm"></span>
                                 </div>
                             </div>
 
-                            <!-- Loading State -->
                             <div id="loading-state" class="hidden flex items-center justify-center space-x-2 py-4">
                                 <div class="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
                                 <span class="text-gray-400">Creating booking...</span>
@@ -279,17 +244,9 @@ export class AddBookingModal {
                         </form>
                     </div>
 
-                    <!-- Modal Footer - Fixed at bottom -->
                     <div class="flex-shrink-0 flex justify-end space-x-3 p-6 border-t border-gray-700 bg-gray-800/50">
-                        <button type="button" id="cancel-booking-btn"
-                            class="px-6 py-2.5 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium">
-                            Cancel
-                        </button>
-                        <button type="submit" form="booking-form"
-                            class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors duration-200 font-medium flex items-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
+                        <button type="button" id="cancel-booking-btn" class="px-6 py-2.5 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700">Cancel</button>
+                        <button type="submit" form="booking-form" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 flex items-center space-x-2">
                             <span>Create Booking</span>
                         </button>
                     </div>
@@ -299,109 +256,87 @@ export class AddBookingModal {
     }
 
     attachEvents() {
-        console.log('🔗 Attaching modal events...');
-
-        // Remove existing event listeners first
         this.removeEventListeners();
 
-        // Add event listeners
         this.modal.addEventListener('click', this.handleModalClick);
         document.addEventListener('keydown', this.handleEscapeKey);
 
-        // Get fresh references to the buttons each time
-        const cancelModalBtn = document.getElementById('cancel-booking-modal');
-        const cancelBtn = document.getElementById('cancel-booking-btn');
-        const form = document.getElementById("booking-form");
-        const tabInstruction = document.getElementById('tab-instruction');
-        const tabRegular = document.getElementById('tab-regular');
+        document.getElementById('cancel-booking-modal')?.addEventListener('click', this.handleCancelClick);
+        document.getElementById('cancel-booking-btn')?.addEventListener('click', this.handleCancelClick);
+        document.getElementById("booking-form")?.addEventListener("submit", this.handleFormSubmit);
+        document.getElementById('tab-instruction')?.addEventListener('click', () => this.handleTabSwitch('instruction'));
+        document.getElementById('tab-regular')?.addEventListener('click', () => this.handleTabSwitch('regular'));
 
-        if (cancelModalBtn) {
-            cancelModalBtn.addEventListener('click', this.handleCancelClick);
-            console.log('✅ Cancel modal button event attached');
-        }
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', this.handleCancelClick);
-            console.log('✅ Cancel button event attached');
-        }
-        if (form) {
-            form.addEventListener("submit", this.handleFormSubmit);
-            console.log('✅ Form submit event attached');
-        }
-
-        // Tab switching - CRITICAL: These were missing!
-        if (tabInstruction) {
-            tabInstruction.addEventListener('click', () => this.handleTabSwitch('instruction'));
-            console.log('✅ Instruction tab event attached');
-        }
-        if (tabRegular) {
-            tabRegular.addEventListener('click', () => this.handleTabSwitch('regular'));
-            console.log('✅ Regular tab event attached');
-        }
-
-        // Setup additional event listeners
         this.setupEventListeners();
         this.setupAutoCalculations();
-
-        console.log('✅ All events attached successfully');
     }
 
-    handleModalClick(e) {
-        if (e.target === this.modal) {
-            this.close();
-        }
+    setupEventListeners() {
+        this.cleanupAutocompleteInstances();
+
+        // Pass 'this.combinedPersonnel' which contains Person IDs
+        // The Map checks happen on Submit
+        const commonConfig = { peopleData: this.combinedPersonnel };
+
+        this.autocompleteInstances['instructor'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'instructor-name', hiddenId: 'instructor-uuid', roleFilter: 'instructors' });
+        this.autocompleteInstances['student1'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'student1-name', hiddenId: 'student1-uuid', roleFilter: 'students' });
+        this.autocompleteInstances['student2'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'student2-name', hiddenId: 'student2-uuid', roleFilter: 'students' });
+        this.autocompleteInstances['student3'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'student3-name', hiddenId: 'student3-uuid', roleFilter: 'students' });
+        this.autocompleteInstances['pilot'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'pilot-name', hiddenId: 'pilot-uuid', roleFilter: 'pilots' });
     }
 
-    handleEscapeKey(e) {
-        if (e.key === 'Escape' && this.isOpen) {
-            this.close();
-        }
+    cleanupAutocompleteInstances() {
+        Object.values(this.autocompleteInstances).forEach(instance => {
+            if (instance && typeof instance.destroy === 'function') instance.destroy();
+        });
+        this.autocompleteInstances = {};
     }
+
+    setupAutoCalculations() {
+        const calculateDuration = () => {
+            const start = document.getElementById("booking-start")?.value;
+            const end = document.getElementById("booking-end")?.value;
+            const display = document.getElementById("booking-duration-display");
+
+            if (!start || !end || !display) return;
+
+            const [sH, sM] = start.split(':').map(Number);
+            const [eH, eM] = end.split(':').map(Number);
+            let mins = (eH * 60 + eM) - (sH * 60 + sM);
+            if (mins < 0) mins += 1440; // Handle overnight
+
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            display.textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} (${(mins / 60).toFixed(2)}h)`;
+        };
+
+        document.getElementById("booking-start")?.addEventListener("change", calculateDuration);
+        document.getElementById("booking-end")?.addEventListener("change", calculateDuration);
+        setTimeout(calculateDuration, 100);
+    }
+
+    handleModalClick(e) { if (e.target === this.modal) this.close(); }
+    handleEscapeKey(e) { if (e.key === 'Escape' && this.isOpen) this.close(); }
+    handleCancelClick() { this.close(); }
+    handleTabSwitch(type) { this.switchBookingType(type); }
 
     handleFormSubmit(e) {
         e.preventDefault();
         this.submitBooking();
     }
 
-    handleCancelClick() {
-        this.close();
-    }
-
-    handleTabSwitch(type) {
-        console.log('🔄 Tab clicked, switching to:', type);
-        this.switchBookingType(type);
-    }
-
     removeEventListeners() {
-        console.log('🔗 Removing modal events...');
-
-        if (this.modal) {
-            this.modal.removeEventListener('click', this.handleModalClick);
-        }
+        if (this.modal) this.modal.removeEventListener('click', this.handleModalClick);
         document.removeEventListener('keydown', this.handleEscapeKey);
-
-        // Note: We don't remove individual button listeners here anymore
-        // because we'll re-attach them fresh each time in attachEvents()
-        console.log('✅ Events removed');
     }
 
     async show(params = {}) {
-        if (this.isOpen) {
-            console.log('Modal already open');
-            return;
-        }
+        if (this.isOpen) return;
 
         try {
-            // ✅ ALWAYS CREATE A FRESH MODAL INSTANCE
-            this.modal = null; // Force recreation
-            this.isInitialized = false; // Force re-initialization
-
-            // Re-initialize completely fresh
-            await this.init();
-
-            // Reset form and prepare
+            await this.init(); // Ensures Data is loaded
             this.resetForm();
 
-            // Show modal with animation
             this.modal.classList.remove("hidden");
             this.isOpen = true;
 
@@ -411,648 +346,263 @@ export class AddBookingModal {
                 modalContent.classList.add("scale-100", "opacity-100");
             }, 10);
 
-            // Load data and setup components
             await this.loadDropdowns();
             this.setDefaultValues(params);
 
-            // Initialize custom pickers
             setTimeout(() => {
                 this.initializeCustomPickers();
+                this.setupEventListeners(); // Re-attach for fresh DOM
             }, 200);
-
-            // Setup event listeners for autocomplete
-            this.setupEventListeners();
-
-            console.log('AddBookingModal shown successfully');
 
         } catch (error) {
             console.error('Error showing modal:', error);
-            showToast('Error opening booking form: ' + error.message, 'error');
+            showToast(error.message, 'error');
         }
     }
 
     close() {
-        if (!this.isOpen || !this.modal) {
-            return;
-        }
-
+        if (!this.isOpen || !this.modal) return;
         this.isOpen = false;
-        const modalContent = this.modal.querySelector('.bg-gray-900');
 
+        const modalContent = this.modal.querySelector('.bg-gray-900');
         if (modalContent) {
             modalContent.classList.remove("scale-100", "opacity-100");
             modalContent.classList.add("scale-95", "opacity-0");
         }
 
         setTimeout(() => {
-            // ✅ COMPLETELY REMOVE THE MODAL FROM DOM
-            if (this.modal && this.modal.parentNode) {
-                this.modal.parentNode.removeChild(this.modal);
-            }
-            this.modal = null; // ✅ Reset modal reference
-
-            this.cleanup(); // ✅ Cleanup all instances
-
-            if (this.onCloseCallback) {
-                this.onCloseCallback();
-            }
+            if (this.modal && this.modal.parentNode) this.modal.parentNode.removeChild(this.modal);
+            this.modal = null;
+            this.cleanup();
+            if (this.onCloseCallback) this.onCloseCallback();
         }, 200);
     }
 
     switchBookingType(type) {
-        console.log('🔄 Switching booking type to:', type);
         this.currentBookingType = type;
+        document.querySelectorAll('.booking-type-tab').forEach(tab => tab.classList.remove('booking-type-tab-active'));
+        document.getElementById(`tab-${type}`)?.classList.add('booking-type-tab-active');
 
-        // Update tab styles
-        document.querySelectorAll('.booking-type-tab').forEach(tab => {
-            tab.classList.remove('booking-type-tab-active');
-        });
-
-        const activeTab = document.getElementById(`tab-${type}`);
-        if (activeTab) {
-            activeTab.classList.add('booking-type-tab-active');
-        } else {
-            console.error('❌ Tab not found:', `tab-${type}`);
-        }
-
-        // Show/hide personnel sections and manage required attributes
-        const instructionSection = document.getElementById('personnel-instruction');
-        const regularSection = document.getElementById('personnel-regular');
+        const instrDiv = document.getElementById('personnel-instruction');
+        const regDiv = document.getElementById('personnel-regular');
 
         if (type === 'instruction') {
-            if (instructionSection) instructionSection.classList.remove('hidden');
-            if (regularSection) regularSection.classList.add('hidden');
-
-            // Set required attributes for instruction fields
-            const instructorName = document.getElementById('instructor-name');
-            const student1Name = document.getElementById('student1-name');
-            if (instructorName) instructorName.setAttribute('required', 'required');
-            if (student1Name) student1Name.setAttribute('required', 'required');
-
-            // Remove required from regular fields
-            const pilotName = document.getElementById('pilot-name');
-            if (pilotName) pilotName.removeAttribute('required');
+            instrDiv?.classList.remove('hidden');
+            regDiv?.classList.add('hidden');
+            document.getElementById('instructor-name')?.setAttribute('required', 'true');
+            document.getElementById('student1-name')?.setAttribute('required', 'true');
+            document.getElementById('pilot-name')?.removeAttribute('required');
         } else {
-            if (instructionSection) instructionSection.classList.add('hidden');
-            if (regularSection) regularSection.classList.remove('hidden');
-
-            // Set required attribute for regular pilot field
-            const pilotName = document.getElementById('pilot-name');
-            if (pilotName) pilotName.setAttribute('required', 'required');
-
-            // Remove required from instruction fields
-            const instructorName = document.getElementById('instructor-name');
-            const student1Name = document.getElementById('student1-name');
-            if (instructorName) instructorName.removeAttribute('required');
-            if (student1Name) student1Name.removeAttribute('required');
+            instrDiv?.classList.add('hidden');
+            regDiv?.classList.remove('hidden');
+            document.getElementById('pilot-name')?.setAttribute('required', 'true');
+            document.getElementById('instructor-name')?.removeAttribute('required');
+            document.getElementById('student1-name')?.removeAttribute('required');
         }
-
-        console.log('✅ Booking type switched to:', type);
     }
 
     setDefaultValues(params = {}) {
         const now = new Date();
-        const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-        document.getElementById("booking-date").value = today;
+        document.getElementById("booking-date").value = now.toISOString().split('T')[0];
 
-        // Set default times (next hour to 2 hours later)
-        const nextHour = new Date();
-        nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
-        const endTime = new Date(nextHour);
-        endTime.setHours(endTime.getHours() + 2);
+        const nextH = new Date(now); nextH.setHours(nextH.getHours() + 1, 0, 0, 0);
+        const endH = new Date(nextH); endH.setHours(endH.getHours() + 2);
 
-        document.getElementById("booking-start").value = nextHour.toTimeString().slice(0, 5);
-        document.getElementById("booking-end").value = endTime.toTimeString().slice(0, 5);
+        document.getElementById("booking-start").value = nextH.toTimeString().slice(0, 5);
+        document.getElementById("booking-end").value = endH.toTimeString().slice(0, 5);
 
-        // Pre-fill plane if provided
-        if (params.planeId) {
-            document.getElementById("booking-plane").value = params.planeId;
-        }
+        if (params.planeId) document.getElementById("booking-plane").value = params.planeId;
 
-        // Check if we have a person ID to pre-fill (could be student, instructor, or any personnel)
         if (params.personId) {
-            // Find the person in combined personnel (searches both students and instructors)
-            const person = this.combinedPersonnel.find(p => p.id === params.personId);
-
-            if (person) {
-                // ALWAYS pre-fill the regular flight pilot field with this person
-                document.getElementById("pilot-name").value = person.name;
-                document.getElementById("pilot-uuid").value = params.personId;
-
-                // Additionally, if the person is a student, pre-fill student1 for instruction flights
-                if (person.type === 'student') {
-                    document.getElementById("student1-name").value = person.name;
-                    document.getElementById("student1-uuid").value = params.personId;
+            const p = this.combinedPersonnel.find(x => x.id === params.personId);
+            if (p) {
+                const name = `${p.first_name} ${p.last_name}`;
+                if (p.type === 'student') {
+                    document.getElementById("student1-name").value = name;
+                    document.getElementById("student1-uuid").value = p.id;
+                } else if (p.type === 'instructor') {
+                    document.getElementById("instructor-name").value = name;
+                    document.getElementById("instructor-uuid").value = p.id;
                 }
-                // If the person is an instructor, pre-fill instructor for instruction flights
-                else if (person.type === 'instructor') {
-                    document.getElementById("instructor-name").value = person.name;
-                    document.getElementById("instructor-uuid").value = params.personId;
-                }
+                // Pre-fill pilot as fallback
+                document.getElementById("pilot-name").value = name;
+                document.getElementById("pilot-uuid").value = p.id;
             }
         }
-
-        // Default to instruction tab (but both personnel sections will be pre-filled if personId provided)
         this.switchBookingType('instruction');
     }
 
     async loadDropdowns() {
-        const planeSelect = document.getElementById("booking-plane");
+        try {
+            const { data: models } = await supabase.schema('api').rpc('get_plane_models');
+            const modelMap = {};
+            if (models) models.forEach(m => modelMap[m.id] = m.model_name);
 
-        // Clear existing options
-        planeSelect.innerHTML = '<option value="">Select Plane</option>';
-
-        // Populate planes
-        this.planes.forEach(plane => {
-            planeSelect.innerHTML += `<option value="${plane.id}">${plane.tail_number} - ${plane.model}</option>`;
-        });
-    }
-
-    setupEventListeners() {
-        // Instructor name autocomplete
-        this.setupAdvancedAutocomplete("instructor-name", "instructor-uuid", 'instructors');
-
-        // Student autocompletes
-        this.setupAdvancedAutocomplete("student1-name", "student1-uuid", 'students');
-        this.setupAdvancedAutocomplete("student2-name", "student2-uuid", 'students');
-        this.setupAdvancedAutocomplete("student3-name", "student3-uuid", 'students');
-
-        // Pilot autocomplete (searches both students and instructors)
-        this.setupAdvancedAutocomplete("pilot-name", "pilot-uuid", 'both');
-    }
-
-    setupAdvancedAutocomplete(inputId, hiddenId, type = 'instructors') {
-        const inputElement = document.getElementById(inputId);
-        const hiddenElement = document.getElementById(hiddenId);
-
-        if (!inputElement) return;
-
-        // Clean up existing instance if it exists
-        if (this.autocompleteInstances[inputId]) {
-            this.autocompleteInstances[inputId].destroy();
+            const select = document.getElementById("booking-plane");
+            select.innerHTML = '<option value="">Select Plane</option>';
+            this.planes.forEach(p => {
+                const name = modelMap[p.model_id] || 'Unknown';
+                select.innerHTML += `<option value="${p.id}">${p.tail_number} - ${name}</option>`;
+            });
+        } catch (err) {
+            console.error("Dropdown load failed", err);
         }
-
-        // Determine data source based on type
-        let dataSource = [];
-        if (type === 'instructors') {
-            dataSource = this.instructors;
-        } else if (type === 'students') {
-            dataSource = this.students;
-        } else if (type === 'both') {
-            dataSource = this.combinedPersonnel;
-        }
-
-        // Create autocomplete instance and store it
-        this.autocompleteInstances[inputId] = new Autocomplete({
-            inputElement: inputElement,
-            dataSource: dataSource,
-            displayField: 'name',
-            valueField: 'id',
-            additionalFields: ['email'],
-            placeholder: inputElement.placeholder,
-            noResultsText: 'No matches found',
-            onSelect: (selected) => {
-                hiddenElement.value = selected.id;
-                console.log(`Selected ${type}:`, selected);
-            },
-            onInput: (query) => {
-                // Clear hidden field when input is cleared
-                if (!query.trim()) {
-                    hiddenElement.value = "";
-                }
-            }
-        });
-    }
-
-    setupAutoCalculations() {
-        console.log('🔄 Setting up auto calculations...');
-
-        const calculateDuration = () => {
-            console.log('📅 Calculating duration...');
-            const startTime = document.getElementById("booking-start");
-            const endTime = document.getElementById("booking-end");
-            const durationDisplay = document.getElementById("booking-duration-display");
-
-            if (!startTime || !endTime || !durationDisplay) {
-                console.log('❌ Missing elements for calculation');
-                return;
-            }
-
-            console.log('Start time:', startTime.value, 'End time:', endTime.value);
-
-            if (!startTime.value || !endTime.value) {
-                durationDisplay.textContent = "--:--";
-                console.log('❌ Missing time values');
-                return;
-            }
-
-            const [startHours, startMinutes] = startTime.value.split(':').map(Number);
-            const [endHours, endMinutes] = endTime.value.split(':').map(Number);
-
-            let totalMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
-
-            // Handle overnight bookings
-            if (totalMinutes < 0) {
-                totalMinutes += 24 * 60;
-            }
-
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            const decimalHours = (totalMinutes / 60).toFixed(2);
-
-            durationDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} (${decimalHours}h)`;
-
-            // Store decimal hours in a data attribute for form submission
-            durationDisplay.setAttribute('data-decimal-hours', decimalHours);
-
-            console.log('✅ Duration calculated:', durationDisplay.textContent);
-        };
-
-        // Get fresh references to the inputs
-        const startTime = document.getElementById("booking-start");
-        const endTime = document.getElementById("booking-end");
-
-        if (startTime) {
-            // Remove existing listeners to avoid duplicates
-            startTime.removeEventListener("change", calculateDuration);
-            startTime.removeEventListener("input", calculateDuration);
-
-            // Add new listeners
-            startTime.addEventListener("change", calculateDuration);
-            startTime.addEventListener("input", calculateDuration);
-            console.log('✅ Start time listeners attached');
-        }
-
-        if (endTime) {
-            // Remove existing listeners to avoid duplicates
-            endTime.removeEventListener("change", calculateDuration);
-            endTime.removeEventListener("input", calculateDuration);
-
-            // Add new listeners
-            endTime.addEventListener("change", calculateDuration);
-            endTime.addEventListener("input", calculateDuration);
-            console.log('✅ End time listeners attached');
-        }
-
-        // Calculate immediately
-        setTimeout(calculateDuration, 100);
-
-        console.log('✅ Auto calculations setup complete');
     }
 
     async validateForm() {
-        const requiredFields = [
-            'booking-date', 'booking-start', 'booking-end',
-            'booking-plane'
-        ];
-
-        for (const fieldId of requiredFields) {
-            const field = document.getElementById(fieldId);
-            if (!field.value.trim()) {
-                this.showValidationError(`Please fill in the ${field.labels[0]?.textContent || fieldId} field`);
-                field.focus();
+        const required = ['booking-date', 'booking-start', 'booking-end', 'booking-plane'];
+        for (const id of required) {
+            if (!document.getElementById(id).value.trim()) {
+                this.showError(`Missing required field.`);
                 return false;
             }
         }
 
-        // Validate based on booking type
+        const start = document.getElementById("booking-start").value;
+        const end = document.getElementById("booking-end").value;
+        if (start >= end) { this.showError("End time must be after start time"); return false; }
+
         if (this.currentBookingType === 'instruction') {
-            // Validate instructor
-            if (!document.getElementById("instructor-uuid").value) {
-                this.showValidationError("Please select a valid instructor from the suggestions");
-                document.getElementById("instructor-name").focus();
-                return false;
-            }
-
-            // Validate at least student 1 is filled
-            if (!document.getElementById("student1-uuid").value) {
-                this.showValidationError("Please select at least one student (Student 1 is required)");
-                document.getElementById("student1-name").focus();
-                return false;
-            }
+            if (!document.getElementById("instructor-uuid").value) { this.showError("Please select an Instructor from the list."); return false; }
+            if (!document.getElementById("student1-uuid").value) { this.showError("Please select Student 1 from the list."); return false; }
         } else {
-            // Validate regular booking - pilot
-            if (!document.getElementById("pilot-uuid").value) {
-                this.showValidationError("Please select a valid pilot from the suggestions");
-                document.getElementById("pilot-name").focus();
-                return false;
-            }
+            if (!document.getElementById("pilot-uuid").value) { this.showError("Please select a Pilot from the list."); return false; }
         }
 
-        // Validate times
-        const startTime = document.getElementById("booking-start").value;
-        const endTime = document.getElementById("booking-end").value;
-
-        if (startTime >= endTime) {
-            this.showValidationError("End time must be after start time");
-            return false;
-        }
-
-        // Validate date is not in the past
-        const bookingDate = new Date(document.getElementById("booking-date").value);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (bookingDate < today) {
-            this.showValidationError("Cannot create bookings in the past");
-            return false;
-        }
-
-        // Validate maximum duration (e.g., 8 hours)
-        const startDateTime = new Date(`${document.getElementById("booking-date").value}T${startTime}`);
-        const endDateTime = new Date(`${document.getElementById("booking-date").value}T${endTime}`);
-        const durationHours = (endDateTime - startDateTime) / (1000 * 60 * 60);
-
-        if (durationHours > 8) {
-            this.showValidationError("Booking duration cannot exceed 8 hours");
-            return false;
-        }
-
-        // Check for overlapping bookings
-        const planeId = document.getElementById("booking-plane").value;
-        const overlappingBookings = await this.checkForOverlappingBookings(
-            planeId,
-            startDateTime.toISOString(),
-            endDateTime.toISOString()
-        );
-
-        if (overlappingBookings) {
-            this.showValidationError("This plane is already booked during the selected time period");
-            return false;
-        }
-
-        this.hideValidationError();
+        this.hideError();
         return true;
     }
 
-    showValidationError(message) {
-        const validationEl = document.getElementById("validation-messages");
-        const validationText = document.getElementById("validation-text");
-        validationText.textContent = message;
-        validationEl.classList.remove("hidden");
+    showError(msg) {
+        const div = document.getElementById("validation-messages");
+        document.getElementById("validation-text").textContent = msg;
+        div.classList.remove("hidden");
     }
-
-    hideValidationError() {
-        const validationEl = document.getElementById("validation-messages");
-        validationEl.classList.add("hidden");
-    }
+    hideError() { document.getElementById("validation-messages").classList.add("hidden"); }
 
     async submitBooking() {
         if (!(await this.validateForm())) return;
+        this.hideError();
 
-        const loadingEl = document.getElementById("loading-state");
-        const submitBtn = document.querySelector('button[type="submit"]');
+        const btn = document.querySelector('button[type="submit"]');
+        const load = document.getElementById("loading-state");
 
         try {
-            loadingEl.classList.remove("hidden");
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div><span>Creating...</span>';
+            load.classList.remove("hidden");
+            btn.disabled = true;
 
-            // Get date and time values
-            const bookingDate = document.getElementById("booking-date").value;
-            const startTime = document.getElementById("booking-start").value;
-            const endTime = document.getElementById("booking-end").value;
+            const date = document.getElementById("booking-date").value;
+            const startT = document.getElementById("booking-start").value;
+            const endT = document.getElementById("booking-end").value;
 
-            // Create Date objects in local timezone, then convert to ISO string (UTC)
-            const startDateTime = new Date(`${bookingDate}T${startTime}`);
-            const endDateTime = new Date(`${bookingDate}T${endTime}`);
+            const { data: { user } } = await supabase.auth.getUser();
 
-            // Gather form data with proper UTC timestamps
-            const formData = {
-                start_time: startDateTime.toISOString(),
-                end_time: endDateTime.toISOString(),
-                plane_id: document.getElementById("booking-plane").value,
-                description: document.getElementById("booking-desc").value || null,
-                booking_type: this.currentBookingType
+            // --- CRITICAL ID RESOLUTION ---
+            const resolveUserId = (personId, roleLabel) => {
+                if (!personId) return null; // Optional fields return null
+
+                // Lookup Person ID (from Autocomplete) in Map to get User ID (Auth)
+                const userId = this.personToUserMap[personId];
+
+                // Strict Validation: If the person exists in Autocomplete but NOT in Map, they have no User account
+                if (!userId) {
+                    throw new Error(`The selected ${roleLabel} does not have an active User Account. Please ensure they are registered as a user.`);
+                }
+                return userId;
             };
 
-            // Add personnel based on booking type
+            const payload = {
+                start_time: new Date(`${date}T${startT}`).toISOString(),
+                end_time: new Date(`${date}T${endT}`).toISOString(),
+                plane_id: document.getElementById("booking-plane").value,
+                description: document.getElementById("booking-desc").value || null,
+                booking_type: this.currentBookingType,
+                created_by: user?.id || null
+            };
+
             if (this.currentBookingType === 'instruction') {
-                formData.instructor_id = document.getElementById("instructor-uuid").value;
-                formData.pilot_id = document.getElementById("student1-uuid").value;
-
-                // Only set student2_id and student3_id if they have values
-                const student2Id = document.getElementById("student2-uuid").value;
-                const student3Id = document.getElementById("student3-uuid").value;
-                formData.student2_id = student2Id || null;
-                formData.student3_id = student3Id || null;
+                payload.instructor_id = resolveUserId(document.getElementById("instructor-uuid").value, "Instructor");
+                payload.pilot_id = resolveUserId(document.getElementById("student1-uuid").value, "Student 1"); // Student 1 is the Pilot in command usually
+                payload.student2_id = resolveUserId(document.getElementById("student2-uuid").value, "Student 2");
+                payload.student3_id = resolveUserId(document.getElementById("student3-uuid").value, "Student 3");
             } else {
-                // Regular flight - pilot is the main person
-                formData.pilot_id = document.getElementById("pilot-uuid").value;
-
-                // Clear instruction-related fields for regular flights
-                formData.instructor_id = null;
-                formData.student2_id = null;
-                formData.student3_id = null;
+                payload.pilot_id = resolveUserId(document.getElementById("pilot-uuid").value, "Pilot");
+                payload.instructor_id = null;
+                payload.student2_id = null;
+                payload.student3_id = null;
             }
 
-            console.log('Submitting booking:', formData);
+            console.log('🚀 Submitting Payload:', payload);
 
-            // Submit to database
-            const { data, error } = await supabase
-                .from("bookings")
-                .insert([formData])
-                .select()
-                .single();
-
+            const { data, error } = await supabase.schema('api').rpc('insert_booking', { payload });
             if (error) throw error;
 
-            showToast('Booking created successfully!', 'success');
             this.close();
-
-            if (this.onSuccessCallback) {
-                this.onSuccessCallback(data);
-            }
+            if (this.onSuccessCallback) this.onSuccessCallback(data);
 
         } catch (error) {
-            console.error('Error creating booking:', error);
-            showToast('Error creating booking: ' + error.message, 'error');
-        } finally {
-            loadingEl.classList.add("hidden");
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>Create Booking</span>';
-        }
-    }
-
-    cleanupAutocompleteInstances() {
-        // Destroy all autocomplete instances
-        Object.values(this.autocompleteInstances).forEach(instance => {
-            if (instance && typeof instance.destroy === 'function') {
-                instance.destroy();
+            console.error('Submission Error:', error);
+            // Show specific mapping errors to the user
+            this.showError(error.message);
+            // Also toast for visibility
+            if (!error.message.includes("active User Account")) {
+                showToast(error.message, 'error');
             }
-        });
-        this.autocompleteInstances = {};
+        } finally {
+            load.classList.add("hidden");
+            btn.disabled = false;
+        }
     }
 
     resetForm() {
-        const form = document.getElementById("booking-form");
-        if (form) {
-            form.reset();
-        }
-
-        // Clear hidden fields
-        const hiddenFields = [
-            "instructor-uuid", "student1-uuid", "student2-uuid",
-            "student3-uuid", "pilot-uuid"
-        ];
-
-        hiddenFields.forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                field.value = "";
-            }
+        document.getElementById("booking-form")?.reset();
+        ["instructor", "student1", "student2", "student3", "pilot"].forEach(k => {
+            if (document.getElementById(`${k}-uuid`)) document.getElementById(`${k}-uuid`).value = "";
+            if (document.getElementById(`${k}-name`)) document.getElementById(`${k}-name`).value = "";
         });
-
-        // Reset duration display
-        const durationDisplay = document.getElementById("booking-duration-display");
-        if (durationDisplay) {
-            durationDisplay.textContent = "--:--";
-        }
-
-        // Reset booking type
-        this.currentBookingType = 'instruction';
+        const disp = document.getElementById("booking-duration-display");
+        if (disp) disp.textContent = "--:--";
         this.switchBookingType('instruction');
-        this.hideValidationError();
-
-        // Clear autocomplete input fields
-        const autocompleteFields = [
-            'instructor-name', 'student1-name', 'student2-name',
-            'student3-name', 'pilot-name'
-        ];
-
-        autocompleteFields.forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                field.value = "";
-            }
-            // Clear the selected item in autocomplete instances
-            if (this.autocompleteInstances[fieldId]) {
-                this.autocompleteInstances[fieldId].clear();
-            }
-        });
+        this.hideError();
     }
 
     initializeCustomPickers() {
-        console.log('🎯 Initializing custom pickers...');
-
-        // Clean up any existing instances first
         this.cleanupCustomPickers();
-
-        // Wait for DOM to be fully ready and modal to be visible
         setTimeout(() => {
-            const dateInput = document.getElementById("booking-date");
-            if (dateInput && !this.datePickerInstance) {
-                try {
-                    this.datePickerInstance = new CustomDatePicker(dateInput);
-                    console.log('✅ Date picker initialized');
-                } catch (error) {
-                    console.error('❌ Failed to initialize date picker:', error);
-                }
-            }
+            try {
+                const d = document.getElementById("booking-date");
+                if (d) this.datePickerInstance = new CustomDatePicker(d);
 
-            const startTimeInput = document.getElementById("booking-start");
-            if (startTimeInput && !this.timePickerInstances.start) {
-                try {
-                    this.timePickerInstances.start = new CustomTimePicker(startTimeInput);
-                    console.log('✅ Start time picker initialized');
-                } catch (error) {
-                    console.error('❌ Failed to initialize start time picker:', error);
-                }
-            }
+                const t1 = document.getElementById("booking-start");
+                if (t1) this.timePickerInstances.start = new CustomTimePicker(t1);
 
-            const endTimeInput = document.getElementById("booking-end");
-            if (endTimeInput && !this.timePickerInstances.end) {
-                try {
-                    this.timePickerInstances.end = new CustomTimePicker(endTimeInput);
-                    console.log('✅ End time picker initialized');
-                } catch (error) {
-                    console.error('❌ Failed to initialize end time picker:', error);
-                }
-            }
-        }, 250); // Increased delay to ensure DOM is ready
+                const t2 = document.getElementById("booking-end");
+                if (t2) this.timePickerInstances.end = new CustomTimePicker(t2);
+            } catch (e) { console.warn("Picker init warning", e); }
+        }, 250);
     }
 
     cleanupCustomPickers() {
-        console.log('🧹 Cleaning up custom pickers...');
+        // Cleanup logic remains same as original
+        document.querySelectorAll('.custom-date-picker-container, .custom-time-picker-container').forEach(e => e.remove());
+        if (this.datePickerInstance?.destroy) this.datePickerInstance.destroy();
+        if (this.timePickerInstances.start?.destroy) this.timePickerInstances.start.destroy();
+        if (this.timePickerInstances.end?.destroy) this.timePickerInstances.end.destroy();
 
-        // Remove any existing custom picker containers from DOM
-        const customPickers = document.querySelectorAll('.custom-date-picker-container, .custom-time-picker-container');
-        customPickers.forEach(picker => {
-            if (picker.parentNode) {
-                picker.parentNode.removeChild(picker);
-            }
+        ["booking-date", "booking-start", "booking-end"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.cssText = ''; el.removeAttribute('readonly'); }
         });
-
-        // Reset native input styles and make them visible again
-        const dateInput = document.getElementById("booking-date");
-        const startTimeInput = document.getElementById("booking-start");
-        const endTimeInput = document.getElementById("booking-end");
-
-        [dateInput, startTimeInput, endTimeInput].forEach(input => {
-            if (input) {
-                input.style.opacity = '';
-                input.style.position = '';
-                input.style.width = '';
-                input.style.height = '';
-                input.style.pointerEvents = '';
-                input.removeAttribute('readonly');
-            }
-        });
-
-        // Properly destroy custom picker instances
-        if (this.datePickerInstance && typeof this.datePickerInstance.destroy === 'function') {
-            this.datePickerInstance.destroy();
-            this.datePickerInstance = null;
-        }
-
-        if (this.timePickerInstances.start && typeof this.timePickerInstances.start.destroy === 'function') {
-            this.timePickerInstances.start.destroy();
-            this.timePickerInstances.start = null;
-        }
-
-        if (this.timePickerInstances.end && typeof this.timePickerInstances.end.destroy === 'function') {
-            this.timePickerInstances.end.destroy();
-            this.timePickerInstances.end = null;
-        }
-
-        console.log('✅ Custom pickers cleaned up');
     }
 
     cleanup() {
-        console.log('🧹 Cleaning up modal completely...');
-
         this.cleanupAutocompleteInstances();
         this.cleanupCustomPickers();
         this.removeEventListeners();
-
-        // Reset all state
         this.isOpen = false;
         this.isInitialized = false;
-
-        console.log('✅ Modal cleanup completed');
     }
 
-    onClose(callback) {
-        this.onCloseCallback = callback;
-    }
-
-    onSuccess(callback) {
-        this.onSuccessCallback = callback;
-    }
-
-    async checkForOverlappingBookings(planeId, startTime, endTime) {
-        try {
-            const { data, error } = await supabase
-                .from("bookings")
-                .select("id")
-                .eq("plane_id", planeId)
-                .or(`and(start_time.lte.${startTime},end_time.gte.${startTime}),and(start_time.lte.${endTime},end_time.gte.${endTime}),and(start_time.gte.${startTime},end_time.lte.${endTime})`);
-
-            if (error) throw error;
-            return data && data.length > 0;
-        } catch (error) {
-            console.error("Error checking overlapping bookings:", error);
-            return false;
-        }
-    }
+    onClose(cb) { this.onCloseCallback = cb; }
+    onSuccess(cb) { this.onSuccessCallback = cb; }
 }

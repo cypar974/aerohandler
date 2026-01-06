@@ -1,4 +1,3 @@
-// ./js/pages/studentdetails.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { editStudent } from './students.js';
@@ -6,77 +5,86 @@ import { FlightDetailsModal } from "../modals/FlightDetailsModal.js";
 import { AddFlightLogModal } from "../modals/AddFlightLogModal.js";
 import { AddBookingModal } from "../modals/AddBookingModal.js";
 import { CreateInvoiceModal } from "../modals/CreateInvoiceModal.js";
-
+import { SettleDebtModal } from "../modals/SettleDebtModal.js";
 
 let currentStudentId = null;
 let previousPageState = null;
 let flightDetailsModal = new FlightDetailsModal();
 let createInvoiceModal = null;
 
-// Declare missing variables (adjust as needed for your app)
-let studentsData = [];
-let currentPage = 1;
-let sortState = {};
-let searchState = {};
-let tableStateBackup = {};
-
+// Declare missing variables
 let currentStudentNumber = null;
-
 let currentBookingModal = null;
 let modalCleanupTimeout = null;
+let settleDebtModal = null;
 
-export async function loadStudentDetailsPage(studentNumber = null) {
-    // Get student number from URL hash or passed parameter
+let returnToPage = 'students';
+
+export async function loadStudentDetailsPage(studentId = null, sourcePage = 'students') {
     const hash = window.location.hash;
-    const studentMatch = hash.match(/^#student\/([A-Za-z0-9-]+)$/);
-    const studentNumberFromUrl = studentMatch ? studentMatch[1] : null;
-    currentStudentNumber = studentNumber || studentNumberFromUrl;
 
-    if (!currentStudentNumber) {
-        showToast('No student number provided', 'error');
+    // CHANGE 2: Use the explicit sourcePage argument
+    returnToPage = sourcePage || 'students';
+
+    // CHANGE 3: Simplified ID logic (argument takes precedence, then hash)
+    let identifier = studentId;
+
+    if (!identifier) {
+        // Fallback: extract from hash if no argument provided
+        identifier = hash.replace('#student/', '');
+    }
+
+    // Handle edge case if studentId passed as an object (legacy support)
+    if (studentId && typeof studentId === 'object') {
+        identifier = studentId.studentId || studentId.id;
+        if (studentId.backPage) returnToPage = studentId.backPage;
+    }
+
+    if (!identifier || identifier === '#student') {
+        showToast('No student identifier provided', 'error');
         return;
     }
 
-    // Store previous state for back navigation
+    // Save state for back button
     previousPageState = {
         page: document.getElementById('main-content').innerHTML,
         scrollPosition: window.scrollY
     };
 
-    await renderStudentProfileByNumber(currentStudentNumber);
+    // Go straight to render
+    await renderStudentProfile(identifier);
 }
 
 async function renderStudentProfileByNumber(studentNumber) {
     showLoading(true);
-
     try {
-        // First, get the student by student_number to find their UUID
-        const { data: studentData, error: studentError } = await supabase
-            .from('students')
-            .select('id, student_number')
-            .eq('student_number', studentNumber)
-            .single();
+        // Since we can't do direct select on 'students' table due to RLS/Lockdown,
+        // we use the RPC to get all students and find the one we need.
+        const { data: allStudents, error } = await supabase
+            .schema('api')
+            .rpc('get_students');
 
-        if (studentError || !studentData) {
+        if (error) throw error;
+
+        const studentData = allStudents.find(s => s.student_number === studentNumber);
+
+        if (!studentData) {
             showToast('Student not found', 'error');
             goBack();
             return;
         }
 
-        // Now use the UUID to load the full profile
         await renderStudentProfile(studentData.id);
-
     } catch (error) {
-        console.error('Error loading student profile:', error);
-        showToast('Error loading student profile: ' + error.message, 'error');
-        renderErrorState(null);
+        console.error('Error resolving student number:', error);
+        showToast('Error loading profile: ' + error.message, 'error');
+        goBack();
     } finally {
         showLoading(false);
     }
 }
 
 export function setupStudentDetailsNavigation() {
-    // Handle browser back button
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.page === 'studentdetails') {
             if (previousPageState) {
@@ -89,88 +97,105 @@ export function setupStudentDetailsNavigation() {
 
 async function renderStudentProfile(studentId) {
     showLoading(true);
+    currentStudentId = studentId;
 
     try {
-
-        if (!flightDetailsModal) {
-            flightDetailsModal = new FlightDetailsModal();
-        }
-
+        if (!flightDetailsModal) flightDetailsModal = new FlightDetailsModal();
         if (!createInvoiceModal) {
             createInvoiceModal = new CreateInvoiceModal();
-            await createInvoiceModal.init(); // Wait for initialization
+            await createInvoiceModal.init();
         }
 
-        // Fetch all required data in parallel
+        // Calculate date range for upcoming bookings (Next 6 months)
+        const startDate = new Date().toISOString();
+        const endDate = new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString();
+
+        // --- STEP 1: RESOLVE USER ID (MUST BE FIRST) ---
+        // We need the User ID because Flight Logs & Bookings are linked to the 'users' table.
+        let userId = null;
+
+        // Call the specific SQL function to find the user linked to this student
+        const { data: userAccounts, error: userError } = await supabase
+            .schema('api')
+            .rpc('get_user_by_person_id', { target_person_id: studentId });
+
+        if (!userError && userAccounts && userAccounts.length > 0) {
+            userId = userAccounts[0].id;
+        } else {
+            console.warn("No User Account found for this Student. Logs may be empty.");
+        }
+
+        // --- STEP 2: FETCH DATA (NOW WE CAN SAFELY USE userId) ---
         const [
             studentResult,
             flightLogsResult,
-            pendingPaymentsResult,
-            paymentHistoryResult,
-            upcomingBookingsResult
+            transactionsResult,
+            bookingsResult,
+            planesResult
         ] = await Promise.all([
-            // Student data
-            supabase
-                .from('students')
-                .select('*')
-                .eq('id', studentId)
-                .single(),
+            // 1. Student data
+            supabase.schema('api').rpc('get_student_by_id', { student_uuid: studentId }).single(),
 
-            // Flight logs
-            supabase
-                .from('flight_logs')
-                .select('*')
-                .eq('pilot_uuid', studentId)
-                .order('flight_date', { ascending: false })
-                .limit(50),
+            // 2. Flight logs (Uses the userId we just found)
+            userId ? supabase.schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId }) : { data: [] },
 
-            // Pending payments
-            supabase
-                .from('payments_receivable')
-                .select('*')
-                .eq('student_id', studentId)
-                .eq('status', 'pending')
-                .order('due_date', { ascending: true }),
+            // 3. Financial Transactions (Uses the userId we just found)
+            userId ? supabase.schema('api').rpc('get_transactions_by_person', { person_uuid: userId }) : { data: [] },
 
-            // Payment history
-            supabase
-                .from('transaction_history')
-                .select('*')
-                .eq('source_id', studentId)
-                .order('payment_date', { ascending: false })
-                .limit(20),
+            // 4. Upcoming bookings (Raw Data)
+            supabase.schema('api').rpc('get_bookings_by_date_range', {
+                start_date: startDate,
+                end_date: endDate
+            }),
 
-            // Upcoming bookings
-            supabase
-                .from('bookings')
-                .select(`*, planes (tail_number, model), instructors (first_name, last_name)`)
-                .or(`pilot_id.eq.${studentId},student2_id.eq.${studentId},student3_id.eq.${studentId}`)
-                .gte('start_time', new Date().toISOString())
-                .order('start_time', { ascending: true })
+            // 5. Planes (To map UUID -> Tail Number)
+            supabase.schema('api').rpc('get_planes')
         ]);
 
-        // Handle errors
-        const studentError = studentResult.error;
-        const flightError = flightLogsResult.error;
-        const paymentsError = pendingPaymentsResult.error;
-        const historyError = paymentHistoryResult.error;
-        const bookingsError = upcomingBookingsResult.error;
+        if (studentResult.error) throw studentResult.error;
 
-        if (studentError) throw studentError;
-
-        // Log non-critical errors but don't throw
-        if (flightError) console.error('Error fetching flight logs:', flightError);
-        if (paymentsError) console.error('Error fetching payments:', paymentsError);
-        if (historyError) console.error('Error fetching payment history:', historyError);
-        if (bookingsError) console.error('Error fetching bookings:', bookingsError);
+        // Log non-critical errors
+        if (flightLogsResult.error) console.error('Error fetching logs:', flightLogsResult.error);
+        if (transactionsResult.error) console.error('Error fetching transactions:', transactionsResult.error);
 
         const student = studentResult.data;
         const flightLogs = flightLogsResult.data || [];
-        const pendingPayments = pendingPaymentsResult.data || [];
-        const paymentHistory = paymentHistoryResult.data || [];
-        const upcomingBookings = upcomingBookingsResult.data || [];
+        const allTransactions = transactionsResult.data || [];
+        const allPlanes = planesResult.data || [];
+        const rawBookings = bookingsResult.data || [];
 
-        // Calculate statistics
+        // --- STEP 3: PROCESS DATA ---
+
+        // Financials
+        const pendingPayments = allTransactions.filter(t =>
+            t.transaction_direction === 'receivable' &&
+            (t.status === 'pending' || t.status === 'overdue')
+        );
+        const paymentHistory = allTransactions.filter(t => t.status === 'paid');
+
+        // Bookings (Filter for this student + Join Plane Data)
+        const studentBookings = rawBookings.filter(b =>
+            (userId && b.pilot_id === userId) ||
+            (userId && b.student2_id === userId) ||
+            (userId && b.student3_id === userId)
+        );
+
+        const upcomingBookings = studentBookings.map(b => {
+            const plane = allPlanes.find(p => p.id === b.plane_id);
+            return {
+                ...b,
+                planes: {
+                    tail_number: plane ? plane.tail_number : 'Unknown Plane',
+                    model: 'Aircraft'
+                },
+                instructors: {
+                    first_name: "Instructor",
+                    last_name: "(Assigned)"
+                }
+            };
+        });
+
+        // Statistics
         const statistics = calculateStudentStatistics(
             student,
             flightLogs,
@@ -179,7 +204,6 @@ async function renderStudentProfile(studentId) {
             upcomingBookings
         );
 
-        // Render the profile
         renderProfileHTML(student, statistics, flightLogs, pendingPayments, upcomingBookings);
         setupStudentDetailsEventListeners(studentId);
 
@@ -197,11 +221,10 @@ function calculateStudentStatistics(student, flightLogs, pendingPayments, paymen
     const totalPaid = paymentHistory.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
     const totalFlights = flightLogs.length;
 
-    // Calculate hours by flight type
     const hoursByType = {
-        solo: flightLogs.filter(f => f.type_of_flight === 'Solo').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        training: flightLogs.filter(f => f.type_of_flight === 'Training').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
-        cross_country: flightLogs.filter(f => f.type_of_flight === 'Cross Country').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
+        solo: flightLogs.filter(f => f.type_of_flight === 'P').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
+        training: flightLogs.filter(f => f.type_of_flight === 'PI' || f.type_of_flight === 'EPI').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
+        cross_country: flightLogs.filter(f => f.nature_of_flight === 'nav').reduce((sum, f) => sum + (f.flight_duration || 0), 0),
         night: flightLogs.filter(f => f.nature_of_flight === 'night').reduce((sum, f) => sum + (f.flight_duration || 0), 0)
     };
 
@@ -217,9 +240,12 @@ function calculateStudentStatistics(student, flightLogs, pendingPayments, paymen
 
 function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcomingBookings) {
     const s = student;
+    const canEdit = true; // Demo logic
+
+    // Status logic (default to active if missing)
+    const displayStatus = 'Active';
 
     document.getElementById('main-content').innerHTML = /* html */ `
-        <!-- Header with Back Button -->
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <button id="back-button" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group">
@@ -232,16 +258,16 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                 <h1 class="text-2xl font-bold text-white">Student Profile</h1>
             </div>
             <div class="flex gap-3">
+                ${canEdit ? `
                 <button id="edit-profile-btn" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
                     Edit Profile
-                </button>
+                </button>` : ''}
             </div>
         </div>
 
-        <!-- Student Header Card -->
         <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-lg border border-gray-700 p-6 mb-6">
             <div class="flex items-start justify-between">
                 <div class="flex items-center gap-6">
@@ -265,33 +291,20 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                                     ${s.phone}
                                 </div>
                             ` : ''}
-                            <div class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                </svg>
-                                ${s.date_of_birth ? new Date(s.date_of_birth).toLocaleDateString() : 'No DOB'}
-                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${s.membership_status === 'active' ? 'bg-green-500/20 text-green-400' :
-            s.membership_status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
-                'bg-yellow-500/20 text-yellow-400'
-        }">
-                        ${s.membership_status || 'inactive'}
-                    </div>
                     <div class="mt-2 text-gray-400 text-sm">
                         Student #: ${s.student_number || 'N/A'}
                     </div>
                     <div class="text-gray-400 text-sm">
-                        Member since: ${s.join_date ? new Date(s.join_date).toLocaleDateString() : 'N/A'}
+                        Joined: ${s.join_date ? new Date(s.join_date).toLocaleDateString() : 'N/A'}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Stats Overview -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-xl shadow-lg">
                 <div class="text-blue-200 text-sm font-medium">Total Flight Hours</div>
@@ -316,55 +329,24 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column - Personal Info & Documents -->
             <div class="space-y-6">
-                <!-- Personal Information -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        Personal Information
-                    </h3>
+                    <h3 class="text-lg font-semibold text-white mb-4">Personal Information</h3>
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between py-2 border-b border-gray-700">
                             <span class="text-gray-400">Date of Birth</span>
                             <span class="text-white">${s.date_of_birth ? new Date(s.date_of_birth).toLocaleDateString() : 'Not set'}</span>
                         </div>
                         <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Nationality</span>
-                            <span class="text-white">${s.nationality || 'Not set'}</span>
-                        </div>
-                        <div class="flex justify-between py-2 border-b border-gray-700">
                             <span class="text-gray-400">Address</span>
                             <span class="text-white text-right">${s.address || 'Not set'}</span>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Emergency Contact</span>
-                            <span class="text-white">${s.emergency_contact_name || 'Not set'}</span>
-                        </div>
-                        ${s.emergency_contact_phone ? `
-                            <div class="flex justify-between py-2 border-b border-gray-700">
-                                <span class="text-gray-400">Emergency Phone</span>
-                                <span class="text-white">${s.emergency_contact_phone}</span>
-                            </div>
-                        ` : ''}
                     </div>
                 </div>
 
-                <!-- License & Medical Information -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                        License & Medical
-                    </h3>
+                    <h3 class="text-lg font-semibold text-white mb-4">License & Medical</h3>
                     <div class="space-y-3 text-sm">
-                        <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">License Number</span>
-                            <span class="text-white">${s.license_number || 'Not set'}</span>
-                        </div>
                         <div class="flex justify-between py-2 border-b border-gray-700">
                             <span class="text-gray-400">License Type</span>
                             <span class="text-white">${s.license_type || 'Not set'}</span>
@@ -375,23 +357,11 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                                 ${s.license_expiry ? new Date(s.license_expiry).toLocaleDateString() : 'Not set'}
                             </span>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Medical Class</span>
-                            <span class="text-white">${s.medical_class || 'Not set'}</span>
-                        </div>
-                        <div class="flex justify-between py-2">
-                            <span class="text-gray-400">Medical Expiry</span>
-                            <span class="text-white ${s.medical_expiry && new Date(s.medical_expiry) < new Date() ? 'text-red-400' : ''}">
-                                ${s.medical_expiry ? new Date(s.medical_expiry).toLocaleDateString() : 'Not set'}
-                            </span>
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Middle Column - Flight Hours & Recent Activity -->
             <div class="space-y-6">
-                <!-- Flight Hours Breakdown -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <h3 class="text-lg font-semibold text-white mb-4">Flight Hours Breakdown</h3>
                     <div class="space-y-3 text-sm">
@@ -407,39 +377,22 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                             <span class="text-gray-400">Dual Hours</span>
                             <span class="text-white font-mono">${stats.hoursByType.training.toFixed(1)}</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Cross Country</span>
-                            <span class="text-white font-mono">${stats.hoursByType.cross_country.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                            <span class="text-gray-400">Night Hours</span>
-                            <span class="text-white font-mono">${stats.hoursByType.night.toFixed(1)}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2">
-                            <span class="text-gray-400">Simulator Hours</span>
-                            <span class="text-white font-mono">${s.simulator_hours || '0'}</span>
-                        </div>
                     </div>
                 </div>
 
-                <!-- Recent Flights -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-white">Recent Flights</h3>
-                        <span class="text-gray-400 text-sm">Last 5 flights</span>
                     </div>
                     <div class="space-y-3">
                         ${flightLogs.length > 0 ?
             flightLogs.slice(0, 5).map(flight => `
                                 <div class="flex justify-between items-center p-3 bg-gray-750 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors flight-item" data-flight-id="${flight.id}">
                                     <div>
-                                        <div class="text-white font-medium">${flight.departure_iata} → ${flight.arrival_iata}</div>
+                                        <div class="text-white font-medium">${flight.departure_icao} → ${flight.arrival_icao}</div>
                                         <div class="text-gray-400 text-sm">${new Date(flight.flight_date).toLocaleDateString()} • ${flight.flight_duration}h</div>
                                     </div>
-                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${flight.type_of_flight === 'Solo' ? 'bg-blue-500/20 text-blue-400' :
-                    flight.type_of_flight === 'Training' ? 'bg-green-500/20 text-green-400' :
-                        'bg-purple-500/20 text-purple-400'
-                }">
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
                                         ${flight.type_of_flight}
                                     </span>
                                 </div>
@@ -447,21 +400,13 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
             '<div class="text-center text-gray-500 py-4">No flight records</div>'
         }
                     </div>
-                    ${flightLogs.length > 5 ? `
-                        <button class="w-full mt-4 py-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-medium view-all-flights">
-                            View All Flights (${flightLogs.length})
-                        </button>
-                    ` : ''}
                 </div>
             </div>
 
-            <!-- Right Column - Financial & Upcoming -->
             <div class="space-y-6">
-                <!-- Pending Payments -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-white">Pending Payments</h3>
-                        <span class="text-gray-400 text-sm">${pendingPayments.length} invoices</span>
                     </div>
                     <div class="space-y-3">
                         ${pendingPayments.length > 0 ?
@@ -471,22 +416,20 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                                         <div class="text-white font-medium">$${parseFloat(payment.amount).toFixed(2)}</div>
                                         <div class="text-gray-400 text-sm">Due ${new Date(payment.due_date).toLocaleDateString()}</div>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-yellow-400 text-sm font-medium">Pending</div>
-                                        <div class="text-gray-400 text-xs">${payment.description}</div>
-                                    </div>
+                                    ${canEdit ? `
+                                    <button class="ml-2 text-xs bg-green-600 px-2 py-1 rounded text-white process-payment" data-payment-id="${payment.id}">
+                                        Pay
+                                    </button>` : ''}
                                 </div>
                             `).join('') :
             '<div class="text-center text-gray-500 py-4">No pending payments</div>'
         }
                     </div>
-        </div>
+                </div>
 
-                <!-- Upcoming Bookings -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-white">Upcoming Bookings</h3>
-                        <span class="text-gray-400 text-sm">Next 7 days</span>
                     </div>
                     <div class="space-y-3">
                         ${upcomingBookings.length > 0 ?
@@ -499,11 +442,6 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                                     <div class="text-gray-400 text-sm">
                                         ${new Date(booking.start_time).toLocaleTimeString()} - ${new Date(booking.end_time).toLocaleTimeString()}
                                     </div>
-                                    ${booking.instructors ? `
-                                    <div class="text-gray-400 text-sm mt-1">
-                                        Instructor: ${booking.instructors.first_name} ${booking.instructors.last_name}
-                                    </div>
-                                ` : ''}
                                 </div>
                             `).join('') :
             '<div class="text-center text-gray-500 py-4">No upcoming bookings</div>'
@@ -511,33 +449,20 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
                     </div>
                 </div>
 
-                <!-- Quick Actions -->
                 <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
                     <h3 class="text-lg font-semibold text-white mb-4">Quick Actions</h3>
                     <div class="grid grid-cols-2 gap-3">
                         <button class="quick-action p-3 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="add-flight">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
                             Add Flight Log
                         </button>
                         <button class="quick-action p-3 bg-green-600 hover:bg-green-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="create-invoice">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                            </svg>
                             Create Invoice
                         </button>
                         <button class="quick-action p-3 bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="schedule-booking">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
                             Schedule Booking
                         </button>
-                        <button class="quick-action p-3 bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="generate-report">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            See report
+                        <button class="quick-action p-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg transition-colors text-white text-sm font-medium flex items-center justify-center gap-2" data-action="settle-account">
+                            Settle Debt
                         </button>
                     </div>
                 </div>
@@ -549,404 +474,202 @@ function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcoming
 function renderErrorState(studentId) {
     document.getElementById('main-content').innerHTML = `
         <div class="flex items-center mb-4">
-            <button id="back-button" class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
-                ← Back
-            </button>
+            <button id="back-button" class="text-blue-400 hover:text-blue-300">← Back</button>
         </div>
         <div class="text-center text-gray-500 py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-            </svg>
-            <h3 class="text-lg font-medium text-gray-300 mb-2">Error Loading Profile</h3>
-            <p class="text-gray-500">Unable to load student profile. Please try again.</p>
-            <button id="retry-btn" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-                Retry
-            </button>
+            <h3 class="text-lg font-medium text-gray-300">Error Loading Profile</h3>
+            <button id="retry-btn" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
         </div>
     `;
-
     document.getElementById('back-button').addEventListener('click', goBack);
     document.getElementById('retry-btn').addEventListener('click', () => renderStudentProfile(studentId));
 }
 
 function setupStudentDetailsEventListeners(studentId) {
-    // Back button
     document.getElementById('back-button').addEventListener('click', goBack);
 
-    // Edit profile
-    document.getElementById('edit-profile-btn').addEventListener('click', async () => {
-        // We need to get the student UUID first since editStudent expects UUID
-        const { data: student, error } = await supabase
-            .from('students')
-            .select('id')
-            .eq('student_number', currentStudentNumber) // Use currentStudentNumber
-            .single();
+    const editBtn = document.getElementById('edit-profile-btn');
+    if (editBtn) {
+        editBtn.addEventListener('click', async () => {
+            // Since we have the ID, we can edit directly
+            editStudent(studentId);
+        });
+    }
 
-        if (student && !error) {
-            editStudent(student.id);
-        } else {
-            showToast('Error loading student for editing', 'error');
-        }
-    });
-
-    // Flight item clicks
     document.addEventListener('click', (e) => {
         const flightItem = e.target.closest('.flight-item');
         if (flightItem) {
-            const flightId = flightItem.getAttribute('data-flight-id');
-            handleFlightClick(flightId);
+            handleFlightClick(flightItem.getAttribute('data-flight-id'));
         }
     });
 
-    // Quick actions
     document.querySelectorAll('.quick-action').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const action = e.target.closest('.quick-action').getAttribute('data-action');
-            handleQuickAction(action, currentStudentNumber); // Use currentStudentNumber instead of studentId
+            handleQuickAction(action, studentId);
         });
     });
 
-    // Process payment
     document.querySelectorAll('.process-payment').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            const paymentId = e.target.getAttribute('data-payment-id');
-            await processPayment(paymentId, studentId);
+            await processPayment(e.target.getAttribute('data-payment-id'), studentId);
         });
     });
-
-    // View all flights
-    const viewAllFlightsBtn = document.querySelector('.view-all-flights');
-    if (viewAllFlightsBtn) {
-        viewAllFlightsBtn.addEventListener('click', () => {
-            loadFlightHistory(studentId);
-        });
-    }
-}
-
-async function loadFlightHistory(studentId) {
-    try {
-        const { data: flightLogs, error } = await supabase
-            .from('flight_logs')
-            .select('*')
-            .eq('pilot_uuid', studentId)
-            .order('flight_date', { ascending: false });
-
-        if (error) throw error;
-
-        // Create a modal or page showing all flights with click functionality
-        showAllFlightsModal(flightLogs);
-    } catch (error) {
-        console.error('Error loading flight history:', error);
-        showToast('Error loading flight history', 'error');
-    }
 }
 
 async function processPayment(paymentId, studentId) {
     try {
         showToast('Processing payment...', 'info');
-
+        const payload = {
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            payment_method: 'card'
+        };
         const { error } = await supabase
-            .from('payments_receivable')
-            .update({
-                status: 'paid',
-                paid_at: new Date().toISOString(),
-                payment_method: 'card'
-            })
-            .eq('id', paymentId);
+            .schema('api').rpc('update_financial_transaction', {
+                transaction_uuid: paymentId,
+                payload: payload
+            });
 
         if (error) throw error;
-
-        showToast('Payment processed successfully!', 'success');
-        // Refresh the profile to update the UI
+        showToast('Payment processed!', 'success');
         await renderStudentProfile(studentId);
     } catch (error) {
-        console.error('Error processing payment:', error);
+        console.error('Payment error:', error);
         showToast('Error processing payment', 'error');
     }
 }
 
-async function sendPaymentReminder(paymentId) {
-    try {
-        showToast('to be implemented', 'info');
-        // Implementation to send payment reminder
-    } catch (error) {
-        console.error('Error sending reminder:', error);
-        showToast('Error sending reminder', 'error');
-    }
-}
-
-function calculateMonthlyProgress(flights) {
-    // Implementation to calculate monthly progress
-    return flights.reduce((acc, flight) => {
-        const month = new Date(flight.flight_date).toLocaleDateString('en', { month: 'short', year: 'numeric' });
-        acc[month] = (acc[month] || 0) + (flight.flight_duration || 0);
-        return acc;
-    }, {});
-}
-
-async function updateStudentStatus(studentId, newStatus) {
-    try {
-        const { error } = await supabase
-            .from('students')
-            .update({ membership_status: newStatus })
-            .eq('id', studentId);
-
-        if (error) throw error;
-
-        showToast(`Student status updated to ${newStatus}`, 'success');
-        await renderStudentProfile(studentId);
-    } catch (error) {
-        console.error('Error updating student status:', error);
-        showToast('Error updating student status', 'error');
-    }
-}
-
-async function handleQuickAction(action, studentNumber) {
+async function handleQuickAction(action, studentId) {
     let currentModal = null;
 
     switch (action) {
         case 'add-flight':
-            // Get UUID from student number
-            const { data: student, error } = await supabase
-                .from('students')
-                .select('id')
-                .eq('student_number', studentNumber) // Use the parameter
-                .single();
-
-            if (student && !error) {
-                currentModal = new AddFlightLogModal();
-                currentModal.init().then(() => {
-                    currentModal.show({
-                        pilotId: student.id
-                    });
-
-                    // Handle successful submission
-                    currentModal.onSuccess(() => {
-                        // Refresh student profile after successful flight log submission
-                        renderStudentProfileByNumber(studentNumber); // Use studentNumber here
-                        cleanupModal();
-                    });
-
-                    // Handle modal close (cancel, ESC, or backdrop click)
-                    currentModal.onClose(() => {
-                        cleanupModal();
-                    });
+            currentModal = new AddFlightLogModal();
+            currentModal.init().then(() => {
+                currentModal.show({ pilotId: studentId });
+                currentModal.onSuccess(() => {
+                    renderStudentProfile(studentId);
+                    cleanupModal();
                 });
-            } else {
-                showToast('Error loading student data', 'error');
-            }
+                currentModal.onClose(() => cleanupModal());
+            });
             break;
 
-
         case 'create-invoice':
-            // Get UUID from student number
-            const { data: invoiceStudent, error: invoiceError } = await supabase
-                .from('students')
-                .select('id')
-                .eq('student_number', studentNumber)
-                .single();
-
-            if (invoiceStudent && !invoiceError && createInvoiceModal) {
-                createInvoiceModal.show({
-                    studentId: invoiceStudent.id
-                });
-
+            if (createInvoiceModal) {
+                createInvoiceModal.show({ studentId: studentId });
                 const invoiceSuccessHandler = () => {
-                    renderStudentProfileByNumber(studentNumber);
+                    renderStudentProfile(studentId);
                     document.removeEventListener('invoiceCreated', invoiceSuccessHandler);
                 };
-
                 document.addEventListener('invoiceCreated', invoiceSuccessHandler);
             }
             break;
 
         case 'schedule-booking':
-            // Get UUID from student number
-            const { data: bookingStudent, error: bookingError } = await supabase
-                .from('students')
-                .select('id')
-                .eq('student_number', studentNumber)
-                .single();
-
-            if (bookingStudent && !bookingError) {
-                // Wait a bit for cleanup to complete
-                setTimeout(() => {
-                    createAddBookingModal(bookingStudent.id); // This now uses the updated function
-                }, 100);
-            } else {
-                showToast('Error loading student data', 'error');
+            setTimeout(() => {
+                createAddBookingModal(studentId);
+            }, 100);
+            break;
+        case 'settle-account':
+            if (!settleDebtModal) {
+                settleDebtModal = new SettleDebtModal();
+                await settleDebtModal.init();
             }
-            break;
 
-        case 'generate-report':
-            showToast('Report generation feature coming soon...', 'info');
-            // Future implementation for report generation
+            // Show modal and pass studentId to pre-fill the search
+            settleDebtModal.show(() => {
+                // Refresh profile to update "Pending Payments" stats
+                renderStudentProfile(studentId);
+            }, studentId);
             break;
-
-        default:
-            console.warn('Unknown action:', action);
     }
 
     function cleanupModal() {
-        // Remove event listeners
-        if (action === 'create-invoice') {
-            document.removeEventListener('invoiceCreated', invoiceSuccessHandler);
-        }
-
-        // Destroy modal instance if it has a destroy method
         if (currentModal && typeof currentModal.destroy === 'function') {
             currentModal.destroy();
         }
-
-        // Clear reference for garbage collection
         currentModal = null;
     }
 }
 
 function createAddBookingModal(studentId) {
-    console.log('🛠️ Creating FRESH AddBookingModal instance...');
-
-    // ✅ ALWAYS CREATE A NEW INSTANCE
+    // Ensure we are passing the PersonID (student UUID) to the modal
     const modal = new AddBookingModal();
-
-    // Set up success callback
-    modal.onSuccess(async (newBooking) => {
-        console.log('✅ Booking created successfully:', newBooking);
-        showToast('Booking created successfully!', 'success');
-        // Refresh the student profile to show updated bookings
-        await renderStudentProfileByNumber(currentStudentNumber);
+    modal.onSuccess(async () => {
+        showToast('Booking created!', 'success');
+        await renderStudentProfile(currentStudentId);
         closeActiveModal();
     });
-
-    // Set up close callback
-    modal.onClose(() => {
-        console.log('📝 AddBookingModal closed');
-        closeActiveModal();
-    });
-
+    modal.onClose(() => closeActiveModal());
     currentBookingModal = modal;
 
-    // ✅ CHANGED: Use personId instead of studentId
-    modal.show({ personId: studentId }).catch(error => {
-        console.error('Failed to show AddBookingModal:', error);
-        showToast('Error opening booking form: ' + error.message, 'error');
+    // Pass personId to the modal
+    modal.show({ personId: studentId }).catch(err => {
+        console.error('Booking modal error:', err);
+        showToast('Error opening booking form', 'error');
     });
 }
 
 function closeActiveModal() {
-    console.log('❌ closeActiveModal called');
-
-    // Prevent multiple calls
     if (window.isClosingModal) return;
     window.isClosingModal = true;
+    if (modalCleanupTimeout) clearTimeout(modalCleanupTimeout);
 
-    // Clear any pending timeouts
-    if (modalCleanupTimeout) {
-        clearTimeout(modalCleanupTimeout);
-        modalCleanupTimeout = null;
-    }
-
-    // Clean up booking modal
     if (currentBookingModal) {
-        // Store reference and clear immediately to prevent recursion
-        const modalToClose = currentBookingModal;
+        if (typeof currentBookingModal.close === 'function') currentBookingModal.close();
+        else if (typeof currentBookingModal.destroy === 'function') currentBookingModal.destroy();
         currentBookingModal = null;
-
-        if (typeof modalToClose.close === 'function') {
-            modalToClose.close();
-        } else if (typeof modalToClose.hide === 'function') {
-            modalToClose.hide();
-        } else if (typeof modalToClose.destroy === 'function') {
-            modalToClose.destroy();
-        } else if (typeof modalToClose.cleanup === 'function') {
-            modalToClose.cleanup();
-        }
     }
 
-    // Reset the flag after a short delay
-    setTimeout(() => {
-        window.isClosingModal = false;
-    }, 100);
+    setTimeout(() => { window.isClosingModal = false; }, 100);
 }
 
 function goBack() {
-    console.log('🔙 Going back, cleaning up modals...');
-
-    // Clean up any active modal instances
     closeActiveModal();
-
-    // Navigate back to students list using hash routing
-    window.history.pushState({}, '', '#students');
-
-    // Navigate back to students list using the event system
-    window.dispatchEvent(new CustomEvent('navigate', {
-        detail: { page: 'students' }
-    }));
+    window.dispatchEvent(new CustomEvent('navigate', { detail: { page: returnToPage } }));
 }
 
 export function cleanupStudentDetailsPage() {
-    console.log('🧹 Cleaning up student details page...');
-
     closeActiveModal();
+    currentStudentId = null;
 
-    // Clear any remaining timeouts
-    if (modalCleanupTimeout) {
-        clearTimeout(modalCleanupTimeout);
-        modalCleanupTimeout = null;
+    if (settleDebtModal) {
+        if (typeof settleDebtModal.hide === 'function') settleDebtModal.hide();
+        settleDebtModal = null;
     }
-
-    // Reset student number
-    currentStudentNumber = null;
 }
 
 function showLoading(show) {
     const existingLoader = document.getElementById('loading-overlay');
-    if (show) {
-        if (!existingLoader) {
-            const loader = document.createElement('div');
-            loader.id = 'loading-overlay';
-            loader.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
-            loader.innerHTML = `
-                <div class="bg-gray-800 rounded-xl p-6 flex items-center gap-3">
-                    <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-white">Loading...</span>
-                </div>
-            `;
-            document.body.appendChild(loader);
-        }
-    } else {
-        if (existingLoader) {
-            existingLoader.remove();
-        }
+    if (show && !existingLoader) {
+        const loader = document.createElement('div');
+        loader.id = 'loading-overlay';
+        loader.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        loader.innerHTML = `<div class="bg-gray-800 rounded-xl p-6 text-white">Loading...</div>`;
+        document.body.appendChild(loader);
+    } else if (!show && existingLoader) {
+        existingLoader.remove();
     }
 }
 
 async function handleFlightClick(flightId) {
     try {
-        showToast('Loading flight details...', 'info');
-
-        // Fetch the complete flight data
         const { data: flightData, error } = await supabase
-            .from('flight_logs')
-            .select('*')
-            .eq('id', flightId)
+            .schema('api').rpc('get_flight_log_by_id', { log_uuid: flightId })
             .single();
 
         if (error) throw error;
-
-        // Show the flight details modal
         if (flightDetailsModal && flightData) {
             flightDetailsModal.show(flightData);
-        } else {
-            showToast('Error loading flight details', 'error');
         }
     } catch (error) {
-        console.error('Error loading flight details:', error);
+        console.error('Flight details error:', error);
         showToast('Error loading flight details', 'error');
     }
 }
 
-// Export the main function
 export default {
     loadStudentDetailsPage,
     setupStudentDetailsNavigation,

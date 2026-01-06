@@ -5,16 +5,33 @@ import { FlightDetailsModal } from "../modals/FlightDetailsModal.js";
 import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { CustomWeekPicker } from "../components/customWeekPicker.js";
+import { Autocomplete } from "../components/autocomplete.js";
+import { getMembers } from "../utils/memberData.js";
 
 let currentDate = new Date();
 let searchQuery = "";
 let flightLogs = [];
 let planes = [];
-let students = [];
-let instructors = [];
+let students = []; // Populated via 
+let instructors = []; // Populated via 
+let allMembers = []; // Raw view data
+let userMap = new Map(); // Maps User UUID -> Person Data
 let currentSearchType = "";
 let currentPlanePage = 0;
 const PLANES_PER_PAGE = 8;
+let searchAutocomplete = null; // Store autocomplete instance
+
+let easaAutocomplete = null;
+let selectedEasaPlaneId = null;
+
+// Enum Mapping for CSS consistency
+const flightTypeCssMap = {
+    'P': 'flight-p',
+    'PI': 'flight-p-i',
+    'EPI': 'flight-ep-i',
+    'EPFE': 'flight-ep-fe',
+    'nav': 'flight-nav'
+};
 
 const calendarStyles = `<style>
 .daily-grid-container,
@@ -286,9 +303,12 @@ export async function loadFlightLogsPage() {
                 <div class="flex space-x-2">
                     <button id="schedule-view-btn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 font-medium">Schedule View</button>
                     <button id="table-view-btn" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 font-medium">Table View</button>
+                    <button id="easa-view-btn" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 font-medium flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                        <span>EASA View</span>
+                    </button>
                 </div>
 
-                <!-- Centered Title -->
                 <h1 class="text-2xl font-bold text-white absolute left-1/2 transform -translate-x-1/2">Flight Logs</h1>
 
                 <button id="create-flight-log-btn" class="bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors duration-200 font-medium flex items-center space-x-2">
@@ -299,25 +319,18 @@ export async function loadFlightLogsPage() {
                 </button>
             </div>
 
-            <!-- Schedule View Content -->
             <div id="schedule-view" class="flex flex-col h-full">
-                <!-- Search bar -->
                 <div class="flex justify-between items-center mb-4 relative">
-                    <div class="w-1/3 relative">
+                    <div class="w-1/3 relative" id="search-container">
                         <div class="relative">
-                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
                             <input id="search-input" type="text" placeholder="Search by plane, pilot, or instructor..."
                                 class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
                         </div>
-                        <ul id="search-suggestions"
-                            class="absolute left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl hidden z-50 max-h-60 overflow-y-auto">
-                        </ul>
                     </div>
                 </div>
-
-                <!-- Date navigation -->
                 <div class="flex justify-center items-center mb-6 space-x-4">
                     <button id="prev-date" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center space-x-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,10 +357,8 @@ export async function loadFlightLogsPage() {
                     </button>
                 </div>
 
-                <!-- Schedule container -->
                 <div id="schedule-container" class="flex-1 overflow-x-auto border border-gray-700 rounded-lg bg-gray-900 shadow-lg"></div>
 
-                <!-- Pagination -->
                 <div id="pagination-controls" class="flex justify-center items-center mt-4 space-x-2 hidden">
                     <button id="prev-page" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center space-x-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -365,16 +376,15 @@ export async function loadFlightLogsPage() {
                 </div>
             </div>
 
-            <!-- Table View Content -->
             <div id="table-view" class="hidden">
-                <div class="flex justify-between items-center mb-6">
+                 <div class="flex justify-between items-center mb-6">
                     <div class="flex space-x-3 items-center">
                         <select id="search-column" class="p-2.5 border border-gray-700 rounded-lg bg-gray-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
                             <option value="pilot_name">Pilot Name</option>
                             <option value="plane_tail">Plane</option>
                             <option value="instructor_name">Instructor</option>
-                            <option value="departure_iata">Departure</option>
-                            <option value="arrival_iata">Arrival</option>
+                            <option value="departure_icao">Departure</option>
+                            <option value="arrival_icao">Arrival</option>
                             <option value="type_of_flight">Flight Type</option>
                         </select>
                         <div class="relative">
@@ -405,40 +415,77 @@ export async function loadFlightLogsPage() {
                 </div>
                 <div id="table-pagination" class="flex justify-center mt-6 space-x-2"></div>
             </div>
+
+            <div id="easa-view" class="hidden flex flex-col h-full">
+                <div class="flex justify-center items-center mb-6">
+                    <div class="w-1/2 relative">
+                         <div class="relative">
+                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <input id="easa-plane-search" type="text" placeholder="Look up a plane tail number (e.g., F-ABCD)..."
+                                class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="easa-content-area" class="flex-1 bg-white text-black overflow-auto rounded-sm p-4 font-mono text-sm shadow-xl">
+                    <div class="text-center text-gray-500 mt-10">Select a plane above to view its Carnet de Route</div>
+                </div>
+            </div>
         </div>
     `;
 
     attachScheduleEvents();
     setupTableViewEvents();
-    setupSearchFunctionality();
     setupDateNavigation();
     setupPagination();
 
     await fetchData();
+    setupSearchFunctionality(); // Setup Autocomplete after data is loaded
     renderSchedule();
     renderTableView();
 
     window.addEventListener('beforeunload', cleanupFlightLogsPage);
 }
 
+// Helper: Resolve User UUID to Member Data
+function resolveUser(userUuid) {
+    if (!userUuid) return null;
+    const userData = userMap.get(userUuid);
+    if (!userData) return null;
+
+    // userData.person_id -> look up in allMembers
+    return allMembers.find(m => m.id === userData.person_id);
+}
+
 async function fetchData() {
     try {
-        const [planesResponse, studentsResponse, flightLogsResponse, instructorsResponse] = await Promise.all([
-            supabase.from("planes").select("*"),
-            supabase.from("students").select("*"),
-            supabase.from("flight_logs").select("*"),
-            supabase.from("instructors").select("*")
+        // Use RPC functions and Views as per strict rules
+        const [planesResponse, membersResponse, usersResponse, flightLogsResponse] = await Promise.all([
+            supabase.schema('api').rpc('get_planes'), // RPC
+            getMembers(),
+            supabase.schema('api').rpc('get_users'), // Need users to map UUID -> Person ID
+            supabase.schema('api').rpc('get_flight_logs') // RPC
         ]);
 
         if (planesResponse.error) throw planesResponse.error;
-        if (studentsResponse.error) throw studentsResponse.error;
+        if (membersResponse.error) throw membersResponse.error;
+        if (usersResponse.error) throw usersResponse.error;
         if (flightLogsResponse.error) throw flightLogsResponse.error;
-        if (instructorsResponse.error) console.error('Error fetching instructors:', instructorsResponse.error);
 
         planes = planesResponse.data || [];
-        students = studentsResponse.data || [];
+        allMembers = membersResponse.data || [];
         flightLogs = flightLogsResponse.data || [];
-        instructors = instructorsResponse.data || [];
+        const users = usersResponse.data || [];
+
+        // Create User Map: User UUID -> User Object (containing person_id)
+        userMap.clear();
+        users.forEach(u => userMap.set(u.id, u));
+
+        // Filter members for legacy variable support (preserving existing logic structure)
+        students = allMembers.filter(m => m.type === 'student');
+        instructors = allMembers.filter(m => m.type === 'instructor');
 
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -447,29 +494,73 @@ async function fetchData() {
 }
 
 function setupTableViewEvents() {
-    // View toggle buttons
-    document.getElementById("schedule-view-btn").addEventListener("click", () => {
-        tableView = false;
-        document.getElementById("schedule-view").classList.remove("hidden");
-        document.getElementById("table-view").classList.add("hidden");
-        document.getElementById("schedule-view-btn").classList.add("bg-blue-600");
-        document.getElementById("schedule-view-btn").classList.remove("bg-gray-700");
-        document.getElementById("table-view-btn").classList.remove("bg-blue-600");
-        document.getElementById("table-view-btn").classList.add("bg-gray-700");
-    });
+    // --- 1. View Navigation (Tabs) ---
+    const scheduleBtn = document.getElementById("schedule-view-btn");
+    const tableBtn = document.getElementById("table-view-btn");
+    const easaBtn = document.getElementById("easa-view-btn");
 
-    document.getElementById("table-view-btn").addEventListener("click", () => {
-        tableView = true;
-        document.getElementById("schedule-view").classList.add("hidden");
-        document.getElementById("table-view").classList.remove("hidden");
-        document.getElementById("table-view-btn").classList.add("bg-blue-600");
-        document.getElementById("table-view-btn").classList.remove("bg-gray-700");
-        document.getElementById("schedule-view-btn").classList.remove("bg-blue-600");
-        document.getElementById("schedule-view-btn").classList.add("bg-gray-700");
-        renderTableView();
-    });
+    const scheduleDiv = document.getElementById("schedule-view");
+    const tableDiv = document.getElementById("table-view");
+    const easaDiv = document.getElementById("easa-view");
 
-    // Table sorting
+    // Helper to handle tab switching
+    function setActiveTab(activeBtn, activeDiv) {
+        // Reset all buttons to inactive style
+        [scheduleBtn, tableBtn, easaBtn].forEach(btn => {
+            if (btn) {
+                btn.classList.remove("bg-blue-600");
+                btn.classList.add("bg-gray-700");
+            }
+        });
+
+        // Hide all content areas
+        [scheduleDiv, tableDiv, easaDiv].forEach(div => {
+            if (div) div.classList.add("hidden");
+        });
+
+        // Set active state
+        if (activeBtn) {
+            activeBtn.classList.remove("bg-gray-700");
+            activeBtn.classList.add("bg-blue-600");
+        }
+        if (activeDiv) {
+            activeDiv.classList.remove("hidden");
+        }
+    }
+
+    // Schedule View Click
+    if (scheduleBtn) {
+        scheduleBtn.addEventListener("click", () => {
+            tableView = false;
+            setActiveTab(scheduleBtn, scheduleDiv);
+        });
+    }
+
+    // Table View Click
+    if (tableBtn) {
+        tableBtn.addEventListener("click", () => {
+            tableView = true;
+            setActiveTab(tableBtn, tableDiv);
+            renderTableView();
+        });
+    }
+
+    // EASA View Click (New)
+    if (easaBtn) {
+        easaBtn.addEventListener("click", () => {
+            // EASA view is technically not the "Table View" mode used for pagination
+            // but we don't strictly set tableView = false to avoid re-rendering schedule unnecessarily
+            setActiveTab(easaBtn, easaDiv);
+
+            // Initialize the autocomplete specific to this view
+            // (Defined in the previous step)
+            if (typeof setupEasaSearch === 'function') {
+                setupEasaSearch();
+            }
+        });
+    }
+
+    // --- 2. Table Sorting Events ---
     document.querySelectorAll("#table-view th[data-column]").forEach(th => {
         th.addEventListener("click", () => {
             const column = th.getAttribute("data-column");
@@ -477,42 +568,240 @@ function setupTableViewEvents() {
         });
     });
 
-    // Table search
-    document.getElementById("search-box").addEventListener("input", e => {
-        searchState.query = e.target.value.toLowerCase();
-        currentPage = 1;
-        renderTableView();
-    });
+    // --- 3. Table Search Events ---
+    const searchBox = document.getElementById("search-box");
+    if (searchBox) {
+        searchBox.addEventListener("input", e => {
+            searchState.query = e.target.value.toLowerCase();
+            currentPage = 1;
+            renderTableView();
+        });
+    }
 
-    document.getElementById("search-column").addEventListener("change", e => {
-        searchState.column = e.target.value;
-        currentPage = 1;
-        renderTableView();
+    const searchColumn = document.getElementById("search-column");
+    if (searchColumn) {
+        searchColumn.addEventListener("change", e => {
+            searchState.column = e.target.value;
+            currentPage = 1;
+            renderTableView();
+        });
+    }
+}
+
+function setupEasaSearch() {
+    const inputElement = document.getElementById("easa-plane-search");
+    if (!inputElement || easaAutocomplete) return; // Prevent double init
+
+    // Format Plane Data for Autocomplete
+    const planeData = planes.map(p => ({
+        id: p.id,
+        name: p.tail_number,
+        type: 'plane', // Custom type
+        searchCategory: 'Plane'
+    }));
+
+    easaAutocomplete = new Autocomplete({
+        inputElement: inputElement,
+        dataSource: planeData,
+        allowedTypes: null,
+        displayField: 'name',
+        valueField: 'id',
+        placeholder: 'Search for a plane...',
+        onSelect: (selection) => {
+            const item = selection.rawItem;
+            if (item) {
+                selectedEasaPlaneId = item.id;
+                renderEasaView(selectedEasaPlaneId);
+            }
+        },
+        onInput: (query) => {
+            if (!query.trim()) {
+                selectedEasaPlaneId = null;
+                document.getElementById("easa-content-area").innerHTML = '<div class="text-center text-gray-500 mt-10">Select a plane above to view its Carnet de Route</div>';
+            }
+        }
     });
 }
 
+function renderEasaView(planeId) {
+    const container = document.getElementById("easa-content-area");
+    const plane = planes.find(p => p.id === planeId);
+
+    // Filter and Sort: specific plane, oldest to newest (logbook style)
+    const logs = flightLogs
+        .filter(f => f.plane_id === planeId)
+        .sort((a, b) => new Date(a.flight_date) - new Date(b.flight_date));
+
+    if (!logs.length) {
+        container.innerHTML = `<div class="text-center text-gray-500 mt-10">No flight logs found for ${plane?.tail_number || 'this plane'}.</div>`;
+        return;
+    }
+
+    // CSS for the print-like table
+    const tableStyle = `
+        <style>
+            .easa-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 11px; }
+            .easa-table th, .easa-table td { border: 1px solid #000; padding: 4px; }
+            .easa-table th { background-color: #f0f0f0; text-align: center; font-weight: bold; }
+            .easa-header-main { background-color: #e0e0e0; }
+            /* Split view simulation */
+            .page-separator { border-left: 4px double #000 !important; }
+        </style>
+    `;
+
+    let rowsHtml = logs.map(flight => {
+        // 1. Date (DD/MM/YY)
+        const dateObj = new Date(flight.flight_date);
+        const dateStr = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getFullYear()).slice(-2)}`;
+
+        // 2. Names (Last Names only per EASA logbook usually, but prompt asks for Family Name)
+        const pilot = resolveUser(flight.pilot_uuid);
+        const instructor = resolveUser(flight.instructor_uuid);
+        let names = pilot ? pilot.last_name.toUpperCase() : "UNKNOWN";
+        if (instructor) {
+            names += ` / ${instructor.last_name.toUpperCase()}`;
+        }
+
+        // 3. Function (Strict Mapping)
+        let functionCode = "";
+        const type = flight.type_of_flight; // 'P', 'EPI', 'EPFE', 'PI'
+        if (type === 'P') functionCode = "P";
+        else if (type === 'EPI') functionCode = "EP / I";
+        else if (type === 'EPFE') functionCode = "EP / FE";
+        else if (type === 'PI') functionCode = "P / I";
+        else functionCode = type; // Fallback
+
+        // 4. Place
+        const depPlace = flight.departure_icao;
+        const arrPlace = flight.arrival_icao;
+
+        // 5. Time UTC (HH:mm)
+        const formatTime = (isoString) => {
+            if (!isoString) return "";
+            const d = new Date(isoString);
+            return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        };
+        const depTime = formatTime(flight.departure_time);
+        const arrTime = formatTime(flight.arrival_time);
+
+        // 6. Flight Time (h'mm) ex: 0h54
+        let durationStr = "0h00";
+        if (flight.flight_duration) {
+            const hours = Math.floor(flight.flight_duration);
+            const minutes = Math.round((flight.flight_duration - hours) * 60);
+            durationStr = `${hours}h${String(minutes).padStart(2, '0')}`;
+        }
+
+        // 7. Nature (Instruction or Privé)
+        // Map 'nav', 'loc', 'pat' or 'flight_type' to Nature? 
+        // Logic: If Instructor present OR type is student -> Instruction, else Privé
+        let nature = "Privé";
+        if (['EPI', 'EPFE', 'PI'].includes(type) || instructor) {
+            nature = "Instruction";
+        }
+
+        // 8. Fuel (Added + PP/PC)
+        // Prefer text fields if available (as they might contain user's "PP" note), else format liters
+        let fuelStr = "-";
+        const totalLiters = (parseFloat(flight.fuel_added_departure_liters) || 0) + (parseFloat(flight.fuel_added_arrival_liters) || 0);
+
+        // Check if there is text annotation in the source fields (we don't have them in JS model yet, usually just liters)
+        // Based on available JS data in flightLogs (from full_sql.sql):
+        // fuel_added_departure (text), fuel_added_arrival (text) ARE in the table but might not be in JS object if RPC didn't return them.
+        // Assuming the RPC returns `SELECT *`, we check the text fields.
+        const depText = flight.fuel_added_departure || "";
+        const arrText = flight.fuel_added_arrival || "";
+
+        if (depText || arrText) {
+            // Combine text if both exist
+            fuelStr = `${depText} ${arrText}`.trim();
+        } else if (totalLiters > 0) {
+            // Fallback formatting if user didn't write text but entered numbers
+            fuelStr = `+${totalLiters}l`;
+        }
+
+        // 9. Oil
+        const oilTotal = (parseFloat(flight.engine_oil_added_departure) || 0) + (parseFloat(flight.engine_oil_added_arrival) || 0);
+        const oilStr = oilTotal > 0 ? `${oilTotal}l` : "-";
+
+        // 10. Observations
+        const obs = flight.incidents_or_observations || "";
+
+        return `
+            <tr>
+                <td>${dateStr}</td>
+                <td style="text-align:left">${names}</td>
+                <td>${functionCode}</td>
+                <td>${depPlace}</td>
+                <td>${arrPlace}</td>
+                <td>${depTime}</td>
+                <td>${arrTime}</td>
+                <td>${durationStr}</td>
+                <td>${nature}</td>
+                
+                <td class="page-separator">${fuelStr}</td>
+                <td>${oilStr}</td>
+                <td style="text-align:left">${obs}</td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        ${tableStyle}
+        <h2 class="text-lg font-bold mb-2 border-b border-black pb-2">CARNET DE ROUTE - ${plane.tail_number}</h2>
+        <table class="easa-table">
+            <thead>
+                <tr class="easa-header-main">
+                    <th colspan="9">PAGE DE GAUCHE</th>
+                    <th colspan="3" class="page-separator">PAGE DE DROITE</th>
+                </tr>
+                <tr>
+                    <th rowspan="2" style="width:60px">1. Date</th>
+                    <th colspan="2">2/3. Equipage</th>
+                    <th colspan="2">4. Lieu</th>
+                    <th colspan="2">5. Heures (UTC)</th>
+                    <th rowspan="2" style="width:50px">6. Tps Vol</th>
+                    <th rowspan="2">7. Nature</th>
+                    <th rowspan="2" class="page-separator">8. Carburant</th>
+                    <th rowspan="2" style="width:40px">9. Huile</th>
+                    <th rowspan="2">10. Incidents / Observations</th>
+                </tr>
+                <tr>
+                    <th>Noms</th>
+                    <th style="width:40px">Fct</th>
+                    <th style="width:45px">Dep</th>
+                    <th style="width:45px">Arr</th>
+                    <th style="width:45px">Dep</th>
+                    <th style="width:45px">Arr</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+        </table>
+    `;
+}
+
 function renderTableView() {
+    // --- DEMO MODE ---
+    const canManage = true;
+    // -----------------
+
     // Process flight logs for table display
     const now = new Date();
 
     let tableData = flightLogs.map(flight => {
         const plane = planes.find(p => p.id === flight.plane_id);
 
-        // Get pilot details
-        let pilotDetails = null;
-        if (flight.pilot_uuid) {
-            // Check students first
-            pilotDetails = students.find(s => s.id === flight.pilot_uuid);
-            if (!pilotDetails) {
-                // If not found in students, check instructors
-                pilotDetails = instructors.find(i => i.id === flight.pilot_uuid);
-            }
-        }
-
-        // Get instructor details
-        const instructorDetails = instructors.find(i => i.id === flight.instructor_uuid);
+        // Resolve people using the new User Map logic
+        const pilotDetails = resolveUser(flight.pilot_uuid);
+        const instructorDetails = resolveUser(flight.instructor_uuid);
 
         const flightDate = new Date(flight.flight_date);
+
+        // Convert SQL Enum to display format or keep as is
+        // SQL values: EPI, EPFE, PI, P, etc.
+        const flightTypeDisplay = flight.type_of_flight;
 
         return {
             ...flight,
@@ -520,13 +809,12 @@ function renderTableView() {
             instructor_name: instructorDetails ?
                 `${instructorDetails.first_name} ${instructorDetails.last_name}` : '-',
             pilot_name: pilotDetails ?
-                (pilotDetails.first_name && pilotDetails.last_name ?
-                    `${pilotDetails.first_name} ${pilotDetails.last_name}` :
-                    pilotDetails.full_name) :
-                flight.pilot_name,
-            route: `${flight.departure_iata} → ${flight.arrival_iata}`,
+                `${pilotDetails.first_name} ${pilotDetails.last_name}` :
+                'Unknown Pilot',
+            route: `${flight.departure_icao} → ${flight.arrival_icao}`,
             flight_date_display: flightDate.toLocaleDateString(),
-            flight_datetime: flightDate
+            flight_datetime: flightDate,
+            type_display: flightTypeDisplay
         };
     });
 
@@ -536,7 +824,7 @@ function renderTableView() {
 
         let value = "";
         if (searchState.column === 'route') {
-            value = `${flight.departure_iata} ${flight.arrival_iata}`.toLowerCase();
+            value = `${flight.departure_icao} ${flight.arrival_icao}`.toLowerCase();
         } else {
             value = (flight[searchState.column] || "").toString().toLowerCase();
         }
@@ -571,7 +859,8 @@ function renderTableView() {
     // Render table
     const tbody = document.getElementById("flight-logs-table");
     tbody.innerHTML = pageData.map((flight, index) => {
-        const flightTypeClass = `flight-${flight.type_of_flight.toLowerCase().replace(/[\/\s]/g, '-')}`;
+        // Map SQL enum to old CSS class
+        const cssClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
         return `
         <tr class="${index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700'} hover:bg-gray-600 cursor-pointer" data-flight-id="${flight.id}">
@@ -586,7 +875,7 @@ function renderTableView() {
             <td class="p-2 border-b border-gray-600">${flight.pilot_name}</td>
             <td class="p-2 border-b border-gray-600">${flight.instructor_name}</td>
             <td class="p-2 border-b border-gray-600">
-                <span class="px-2 py-1 rounded text-xs ${flightTypeClass}">${flight.type_of_flight}</span>
+                <span class="px-2 py-1 rounded text-xs ${cssClass}">${flight.type_display}</span>
             </td>
             <td class="p-2 border-b border-gray-600 font-medium">${flight.route}</td>
             <td class="p-2 border-b border-gray-600">${flight.flight_duration || 0}h</td>
@@ -687,69 +976,70 @@ function renderTablePagination(totalPages) {
 }
 
 function setupSearchFunctionality() {
-    const searchInput = document.getElementById("search-input");
-    const suggestionsBox = document.getElementById("search-suggestions");
+    const inputElement = document.getElementById("search-input");
+    if (!inputElement) return;
 
-    suggestionsBox.addEventListener("click", (e) => {
-        const li = e.target.closest("li[data-label]");
-        if (!li) return;
-        searchInput.value = li.getAttribute("data-label");
-        searchQuery = li.getAttribute("data-label");
-        currentSearchType = li.getAttribute("data-type");
-        suggestionsBox.classList.add("hidden");
-        renderSchedule();
-    });
+    if (searchAutocomplete) {
+        searchAutocomplete.destroy();
+    }
 
-    searchInput.addEventListener("input", (e) => {
-        const query = e.target.value.trim().toLowerCase();
-        if (!query) {
-            searchQuery = "";
-            suggestionsBox.innerHTML = "";
-            suggestionsBox.classList.add("hidden");
-            renderSchedule();
-            return;
-        }
+    // Prepare unified data source for the autocomplete
+    // 1. Planes: Map tail_number to name. Leave 'type' undefined to avoid 'User' badge (or set custom)
+    const planeData = planes.map(p => ({
+        id: p.id,
+        name: p.tail_number,
+        searchCategory: 'Plane', // Helper for onSelect logic
+        // We leave 'type' undefined so Autocomplete.getItemType falls back gracefully (or returns 'User' based on firstName presence, 
+        // but since we only have name/tail_number, it should be clean).
+        // Alternatively, if we want a badge, we can set type: 'student' (mapped to Student) etc, but 'Plane' isn't in the enum list in Autocomplete.
+    }));
 
-        let suggestions = [];
+    // 2. Instructors
+    const instructorData = instructors.map(i => ({
+        id: i.id,
+        name: `${i.first_name} ${i.last_name}`,
+        type: 'instructor', // Matches Autocomplete enum
+        searchCategory: 'Instructor'
+    }));
 
-        // Search planes
-        planes.forEach(p => {
-            if (p.tail_number && p.tail_number.toLowerCase().includes(query)) {
-                suggestions.push({ type: "Plane", label: p.tail_number });
+    // 3. Pilots (Students + others)
+    const pilotData = students.map(s => ({
+        id: s.id,
+        name: `${s.first_name} ${s.last_name}`,
+        type: s.type, // 'student', 'regular_pilot', etc.
+        searchCategory: 'Pilot'
+    }));
+
+    const combinedData = [...planeData, ...instructorData, ...pilotData];
+
+    searchAutocomplete = new Autocomplete({
+        inputElement: inputElement,
+        dataSource: combinedData,
+        allowedTypes: null,
+        displayField: 'name',
+        valueField: 'id',
+        placeholder: 'Search by plane, pilot, or instructor...',
+
+        // CHANGE THIS SECTION
+        onSelect: (selection) => {
+            // Extract the actual data object from the selection wrapper
+            const item = selection.rawItem;
+
+            if (item) {
+                // Update the search state
+                searchQuery = item.name;
+                // Map the item to the categories expected by renderSchedule logic
+                currentSearchType = item.searchCategory;
+                renderSchedule();
             }
-        });
-
-        // Search students
-        students.forEach(s => {
-            const fullName = `${s.first_name} ${s.last_name}`;
-            if (fullName.toLowerCase().includes(query)) {
-                suggestions.push({ type: "Pilot", label: fullName });
+        },
+        onInput: (query) => {
+            // If cleared, reset search
+            if (!query.trim()) {
+                searchQuery = "";
+                currentSearchType = "";
+                renderSchedule();
             }
-        });
-
-        // Search instructors
-        instructors.forEach(i => {
-            const fullName = `${i.first_name} ${i.last_name}`;
-            if (fullName.toLowerCase().includes(query)) {
-                suggestions.push({ type: "Instructor", label: fullName });
-            }
-        });
-
-        if (suggestions.length > 0) {
-            suggestionsBox.innerHTML = suggestions.map(s =>
-                `<li class="p-2 hover:bg-gray-700 cursor-pointer" data-type="${s.type}" data-label="${s.label}">${s.type} – ${s.label}</li>`
-            ).join("");
-            suggestionsBox.classList.remove("hidden");
-        } else {
-            suggestionsBox.innerHTML = `<li class="p-2 text-gray-400">No matches</li>`;
-            suggestionsBox.classList.remove("hidden");
-        }
-    });
-
-    // Close suggestions when clicking outside
-    document.addEventListener("click", (e) => {
-        if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-            suggestionsBox.classList.add("hidden");
         }
     });
 }
@@ -982,6 +1272,11 @@ export async function cleanupFlightLogsPage() {
         datePickerInstance = null;
     }
 
+    if (searchAutocomplete) {
+        searchAutocomplete.destroy();
+        searchAutocomplete = null;
+    }
+
     // Clean up all modal instances with proper destruction
     if (FlightDetailsModal.cleanupAll) {
         FlightDetailsModal.cleanupAll();
@@ -1167,6 +1462,10 @@ function viewFlight(flightId) {
 }
 
 function renderSchedule() {
+    // --- DEMO MODE ---
+    const canManage = true;
+    // -----------------
+
     const scheduleContainer = document.getElementById("schedule-container");
     if (!scheduleContainer) return;
 
@@ -1358,27 +1657,18 @@ function renderPlaneFlights(planeId, dayFlights, dayStart, hourWidth) {
         const left = startHours * hourWidth;
         const width = duration * hourWidth;
 
-        // Get flight details
-        const instructor = instructors.find(i => i.id === flight.instructor_uuid);
-
-        // Get pilot details
-        let pilotDetails = null;
-        if (flight.pilot_uuid) {
-            pilotDetails = students.find(s => s.id === flight.pilot_uuid);
-            if (!pilotDetails) {
-                pilotDetails = instructors.find(i => i.id === flight.pilot_uuid);
-            }
-        }
+        // Get flight details via Map (Using resolveUser logic)
+        const instructor = resolveUser(flight.instructor_uuid);
+        const pilotDetails = resolveUser(flight.pilot_uuid);
 
         const pilotName = pilotDetails ?
-            (pilotDetails.first_name && pilotDetails.last_name ?
-                `${pilotDetails.first_name} ${pilotDetails.last_name}` :
-                pilotDetails.full_name) :
-            flight.pilot_name;
+            `${pilotDetails.first_name} ${pilotDetails.last_name}` : 'Unknown';
 
         const instructorName = instructor ?
             `${instructor.first_name} ${instructor.last_name}` : "-";
-        const flightTypeClass = `flight-${flight.type_of_flight.toLowerCase().replace(/[\/\s]/g, '-')}`;
+
+        // Use helper map for CSS classes based on SQL Enum
+        const flightTypeClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
         if (width <= 0) return '';
 
@@ -1386,7 +1676,7 @@ function renderPlaneFlights(planeId, dayFlights, dayStart, hourWidth) {
             <div class="flight-slot daily-flight ${flightTypeClass}" 
                  data-flight-id="${flight.id}"
                  style="left: ${left}px; width: ${width}px;"
-                 title="${pilotName} with ${instructorName} - ${flight.type_of_flight} - ${flight.departure_iata} → ${flight.arrival_iata}">
+                 title="${pilotName} with ${instructorName} - ${flight.type_of_flight} - ${flight.departure_icao} → ${flight.arrival_icao}">
                 <div class="flight-content">
                     <div class="flight-pilot">${pilotName}</div>
                     <div class="flight-instructor">${instructorName}</div>
@@ -1410,22 +1700,11 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
     if (searchQuery && currentSearchType) {
         rowFlights = rowFlights.filter(flight => {
             const plane = planes.find(p => p.id === flight.plane_id);
-            const instructor = instructors.find(i => i.id === flight.instructor_uuid);
-
-            // Get pilot details
-            let pilotDetails = null;
-            if (flight.pilot_uuid) {
-                pilotDetails = students.find(s => s.id === flight.pilot_uuid);
-                if (!pilotDetails) {
-                    pilotDetails = instructors.find(i => i.id === flight.pilot_uuid);
-                }
-            }
+            const instructor = resolveUser(flight.instructor_uuid);
+            const pilotDetails = resolveUser(flight.pilot_uuid);
 
             const pilotName = pilotDetails ?
-                (pilotDetails.first_name && pilotDetails.last_name ?
-                    `${pilotDetails.first_name} ${pilotDetails.last_name}` :
-                    pilotDetails.full_name) :
-                flight.pilot_name;
+                `${pilotDetails.first_name} ${pilotDetails.last_name}` : 'Unknown';
 
             if (currentSearchType === "Pilot") {
                 return pilotName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1460,24 +1739,14 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
 
         // Get flight details
         const plane = planes.find(p => p.id === flight.plane_id);
-        const instructor = instructors.find(i => i.id === flight.instructor_uuid);
-
-        // Get pilot details
-        let pilotDetails = null;
-        if (flight.pilot_uuid) {
-            pilotDetails = students.find(s => s.id === flight.pilot_uuid);
-            if (!pilotDetails) {
-                pilotDetails = instructors.find(i => i.id === flight.pilot_uuid);
-            }
-        }
+        const instructor = resolveUser(flight.instructor_uuid);
+        const pilotDetails = resolveUser(flight.pilot_uuid);
 
         const pilotName = pilotDetails ?
-            (pilotDetails.first_name && pilotDetails.last_name ?
-                `${pilotDetails.first_name} ${pilotDetails.last_name}` :
-                pilotDetails.full_name) :
-            flight.pilot_name;
+            `${pilotDetails.first_name} ${pilotDetails.last_name}` : 'Unknown';
 
-        const flightTypeClass = `flight-${flight.type_of_flight.toLowerCase().replace(/[\/\s]/g, '-')}`;
+        // Use helper map for CSS classes
+        const flightTypeClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
         // Determine what to display based on search type
         let firstLine = '';
@@ -1502,7 +1771,7 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
 
         const instructorFullName = instructor ?
             `${instructor.first_name} ${instructor.last_name}` : '';
-        const tooltip = `${plane?.tail_number || 'Unknown'} - ${pilotName}${instructor ? ' with ' + instructorFullName : ''} - ${flight.type_of_flight} - ${flight.departure_iata} → ${flight.arrival_iata}`;
+        const tooltip = `${plane?.tail_number || 'Unknown'} - ${pilotName}${instructor ? ' with ' + instructorFullName : ''} - ${flight.type_of_flight} - ${flight.departure_icao} → ${flight.arrival_icao}`;
         if (width <= 0) return '';
 
         return `

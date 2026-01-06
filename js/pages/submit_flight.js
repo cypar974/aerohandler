@@ -6,6 +6,12 @@ let flightLogModal = null;
 let isInitialized = false;
 
 export async function loadSubmitFlightPage() {
+    // --- DEMO MODE: PERMISSIONS FLAG ---
+    // Context: In the future, this will check if the user has the 'student', 'pilot', or 'instructor' role.
+    // For now, we default to TRUE to allow development.
+    const canSubmitFlight = true;
+    // -----------------------------------
+
     try {
         console.log('Loading submit flight page...');
 
@@ -17,9 +23,20 @@ export async function loadSubmitFlightPage() {
             throw new Error('Main content element not found');
         }
 
+        // Logic Lock: Preserving existing DOM structure
+        // Flag-Based Pattern: If we add logic later to restrict access, we handle it here.
+        if (!canSubmitFlight) {
+            mainContent.innerHTML = `
+                <div class="flex flex-col h-full items-center justify-center text-white">
+                    <h2 class="text-xl font-bold text-red-500">Access Denied</h2>
+                    <p class="text-gray-400">You do not have permission to submit flight logs.</p>
+                </div>
+            `;
+            return;
+        }
+
         mainContent.innerHTML = `
             <div class="flex flex-col h-full text-white">
-                <!-- Standalone Form Container -->
                 <div id="flight-log-container" class="flex-1 overflow-y-auto">
                     <div class="text-center text-gray-500 py-8">
                         <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
@@ -30,6 +47,7 @@ export async function loadSubmitFlightPage() {
         `;
 
         // Initialize as standalone component
+        // Note: The Modal inside this function handles the RPC calls and Enum mapping.
         await initializeFlightLogForm();
         isInitialized = true;
 
@@ -60,6 +78,10 @@ async function initializeFlightLogForm() {
         container.innerHTML = '';
 
         // Create new modal instance
+        // The AddFlightLogModal is responsible for:
+        // 1. Fetching people via '
+        // 2. Fetching planes via 'api.get_available_planes'
+        // 3. Submitting via 'api.insert_flight_log' (RPC)
         flightLogModal = new AddFlightLogModal(container);
 
         // Initialize but don't show immediately
@@ -87,7 +109,7 @@ async function initializeFlightLogForm() {
         console.error('Error initializing flight log form:', error);
         showToast('Error loading flight log form: ' + error.message, 'error');
 
-        // Enhanced error handling
+        // Enhanced error handling (Preserved from original)
         const container = document.getElementById('flight-log-container');
         if (container) {
             container.innerHTML = `

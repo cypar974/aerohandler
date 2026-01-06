@@ -6,6 +6,7 @@ import { BookingDetailsModal } from "../modals/BookingDetailsModal.js";
 import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { BookingCancelModal } from "../modals/BookingCancelModal.js";
+import { getMembers } from "../utils/memberData.js";
 
 let currentDate = new Date();
 let searchQuery = "";
@@ -53,13 +54,11 @@ export async function loadSchedulePage() {
 
     document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col h-full text-white relative">
-            <!-- View Toggle and Controls -->
             <div class="flex justify-between items-center mb-6">
                 <div class="flex space-x-2">
                     <button id="schedule-view-btn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 font-medium">Schedule View</button>
                     <button id="table-view-btn" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 font-medium">Table View</button>
                     
-                    <!-- Show All Bookings Toggle -->
                     <div class="flex items-center space-x-3 ml-4">
                         <span class="text-sm text-gray-300">Show All Bookings</span>
                         <input type="checkbox" id="show-all-toggle" class="toggle">
@@ -73,9 +72,7 @@ export async function loadSchedulePage() {
                 </button>
             </div>
 
-            <!-- Schedule View Content -->
             <div id="schedule-view" class="flex flex-col h-full">
-                <!-- Search bar -->
                 <div class="flex justify-between items-center mb-4 relative">
                     <div class="w-1/3 relative">
                         <div class="relative">
@@ -91,7 +88,6 @@ export async function loadSchedulePage() {
                     </div>
                 </div>
 
-                <!-- Date navigation -->
                 <div class="flex justify-center items-center mb-6 space-x-4">
                     <button id="prev-date" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center space-x-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,10 +107,8 @@ export async function loadSchedulePage() {
                     </button>
                 </div>
 
-                <!-- Schedule container -->
                 <div id="schedule-container" class="flex-1 overflow-x-auto border border-gray-700 rounded-lg bg-gray-900 shadow-lg"></div>
 
-                <!-- Pagination -->
                 <div id="pagination-controls" class="flex justify-center items-center mt-4 space-x-2 hidden">
                     <button id="prev-page" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex items-center space-x-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +126,6 @@ export async function loadSchedulePage() {
                 </div>
             </div>
 
-            <!-- Table View Content -->
             <div id="table-view" class="hidden">
                 <div class="flex justify-between items-center mb-6">
                     <div class="flex space-x-3 items-center">
@@ -257,22 +250,47 @@ function setupToggleEvents() {
 
 async function fetchData() {
     try {
-        const [planesResponse, studentsResponse, bookingsResponse, instructorsResponse] = await Promise.all([
-            supabase.from("planes").select("*"),
-            supabase.from("students").select("*"),
-            supabase.from("bookings").select("*"),
-            supabase.from("instructors").select("*")
+        // SURGICAL REFACTOR: Fetch from API RPCs and Views
+        // We need users to map Auth IDs to Person IDs for the legacy logic
+        const [planesResponse, bookingsResponse, usersResponse, membersResponse] = await Promise.all([
+            supabase.schema('api').rpc('get_planes'),
+            supabase.schema('api').rpc('get_bookings'),
+            supabase.schema('api').rpc('get_users'),
+            getMembers(),
         ]);
 
         if (planesResponse.error) throw planesResponse.error;
-        if (studentsResponse.error) throw studentsResponse.error;
         if (bookingsResponse.error) throw bookingsResponse.error;
-        if (instructorsResponse.error) console.error('Error fetching instructors:', instructorsResponse.error);
+        if (usersResponse.error) throw usersResponse.error;
+        if (membersResponse.error) throw membersResponse.error;
 
         planes = planesResponse.data || [];
-        students = studentsResponse.data || [];
         bookings = bookingsResponse.data || [];
-        instructors = instructorsResponse.data || [];
+
+        const allUsers = usersResponse.data || [];
+        const allMembers = membersResponse.data || [];
+
+        // DATA WIRING: Map View Data to Legacy Structure
+        // The UI logic expects `students` array where .id matches booking.pilot_id
+        // In the new schema, booking.pilot_id is a User UUID, but.id is a Person UUID.
+        // We create a "Hydrated User" object: Properties from View, ID from User Table.
+
+        students = allUsers
+            .filter(u => u.role === 'student' || u.role === 'regular_pilot' || u.role === 'other_person')
+            .map(u => {
+                const details = allMembers.find(m => m.id === u.person_id);
+                // Return object with View details but User UUID as the ID to satisfy legacy UI lookups
+                return details ? { ...details, id: u.id, person_id: u.person_id } : null;
+            })
+            .filter(Boolean);
+
+        instructors = allUsers
+            .filter(u => u.role === 'instructor')
+            .map(u => {
+                const details = allMembers.find(m => m.id === u.person_id);
+                return details ? { ...details, id: u.id, person_id: u.person_id } : null;
+            })
+            .filter(Boolean);
 
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -332,12 +350,18 @@ function setupTableViewEvents() {
 }
 
 function renderTableView() {
+    // --- DEMO MODE: PERMISSIONS FLAG ---
+    const isDemoAdmin = true;
+    // -----------------------------------
+
     // Process bookings for table display
     const timeFilter = document.getElementById("time-filter").value;
     const now = new Date();
 
     let tableData = bookings.map(booking => {
         const plane = planes.find(p => p.id === booking.plane_id);
+        // Note: instructors/students arrays now contain User UUIDs as .id, 
+        // so this finding logic works with the raw booking data (which has User UUIDs).
         const instructor = instructors.find(i => i.id === booking.instructor_id);
 
         // Get pilot name (primary student/pilot) - handle both students and instructors
@@ -428,8 +452,8 @@ function renderTableView() {
         <td class="p-2 border-b border-gray-600 max-w-xs truncate" title="${booking.description || ''}">${booking.description || '-'}</td>
         <td class="p-2 border-b border-gray-600">
             <div class="flex justify-center space-x-2">
-                <button class="text-blue-400 hover:text-blue-300 edit-booking" data-id="${booking.id}">Edit</button>
-                <button class="text-red-400 hover:text-red-300 delete-booking" data-id="${booking.id}">Delete</button>
+                ${isDemoAdmin ? `<button class="text-blue-400 hover:text-blue-300 edit-booking" data-id="${booking.id}">Edit</button>` : ''}
+                ${isDemoAdmin ? `<button class="text-red-400 hover:text-red-300 delete-booking" data-id="${booking.id}">Delete</button>` : ''}
             </div>
         </td>
     </tr>
@@ -564,10 +588,10 @@ async function deleteBooking(bookingId) {
     const modal = new BookingCancelModal({
         booking: bookingWithDetails,
         onConfirm: async (bookingToDelete) => {
-            const { error } = await supabase
-                .from('bookings')
-                .delete()
-                .eq('id', bookingToDelete.id);
+            // SURGICAL REFACTOR: Use RPC for delete
+            const { error } = await supabase.schema('api').rpc('delete_booking', {
+                booking_uuid: bookingToDelete.id
+            });
 
             if (error) {
                 showToast('Error deleting booking: ' + error.message, 'error');
@@ -743,6 +767,10 @@ function setupPagination() {
 }
 
 function renderSchedule() {
+    // --- DEMO MODE: PERMISSIONS FLAG ---
+    const isDemoAdmin = true;
+    // -----------------------------------
+
     const scheduleContainer = document.getElementById("schedule-container");
     if (!scheduleContainer) return;
     scheduleContainer.innerHTML = "";
@@ -1059,15 +1087,18 @@ function attachScheduleEvents() {
 function createBooking() {
     closeActiveModal();
 
+    // Use our re-mapped 'students' and 'instructors' arrays which contain valid User UUIDs as IDs
     const modal = new AddBookingModal({
         planes,
         students,
         instructors,
         onSave: async (newBooking) => {
-            const { data, error } = await supabase
-                .from('bookings')
-                .insert([newBooking])
-                .select();
+            // SURGICAL REFACTOR: Use RPC
+            // newBooking object likely has pilot_id set to the value of selected option from the modal
+            // Our students array has ID = User UUID, so pilot_id will be correct.
+            const { data, error } = await supabase.schema('api').rpc('insert_booking', {
+                payload: newBooking
+            });
 
             if (error) {
                 showToast('Error creating booking: ' + error.message, 'error');
@@ -1099,10 +1130,11 @@ function editBooking(bookingId) {
         students,
         instructors,
         onSave: async (updatedBooking) => {
-            const { error } = await supabase
-                .from('bookings')
-                .update(updatedBooking)
-                .eq('id', booking.id);
+            // SURGICAL REFACTOR: Use RPC
+            const { error } = await supabase.schema('api').rpc('update_booking', {
+                booking_uuid: booking.id,
+                payload: updatedBooking
+            });
 
             if (error) {
                 showToast('Error updating booking: ' + error.message, 'error');

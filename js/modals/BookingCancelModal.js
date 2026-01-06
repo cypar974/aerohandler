@@ -1,77 +1,88 @@
-// ./js/modals/BookingCancelModal.js
+// ./components/modals/BookingCancelModal.js
 import { showToast } from "../components/showToast.js";
+import { supabase } from "../supabase.js";
 
 export class BookingCancelModal {
-    constructor(options = {}) {
-        this.booking = options.booking || null;
-        this.onConfirm = options.onConfirm || null;
-        this.onCancel = options.onCancel || null;
+    constructor(config = {}) {
+        console.log('🗑️ BookingCancelModal initialized');
 
+        // 1. Singleton Cleanup
+        this.cleanupExistingModals();
+
+        // 2. Configuration
+        this.booking = config.booking || null;
+        this.onConfirm = config.onConfirm || null;
+        this.onCancel = config.onCancel || null;
+
+        // 3. State
         this.modal = null;
         this.isLoading = false;
+        this.boundHandleEsc = this.handleEsc.bind(this); // Bind for removal later
+
+        this.render();
     }
+
+    cleanupExistingModals() {
+        const existing = document.querySelectorAll('#booking-cancel-modal');
+        existing.forEach(el => el.remove());
+    }
+
+    // --- VIEW LOGIC ---
 
     createModal() {
         this.modal = document.createElement('div');
-        this.modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        this.modal.id = 'booking-cancel-modal';
+        this.modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4 backdrop-blur-sm transition-opacity duration-300 opacity-0';
+
+        // Extract display data safely
+        const displayData = this.getDisplayData();
+
         this.modal.innerHTML = `
-            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-md border border-gray-700 transform transition-all duration-300 scale-95 opacity-0 modal-content">
                 <div class="p-6">
-                    <!-- Header -->
-                    <div class="flex items-center mb-4">
-                        <div class="flex-shrink-0 bg-red-100 rounded-full p-2 mr-3">
-                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="flex-shrink-0 bg-red-900/30 rounded-full p-3 border border-red-800">
+                            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                             </svg>
                         </div>
-                        <h3 class="text-lg font-semibold text-white">Cancel Booking</h3>
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Cancel Booking?</h3>
+                            <p class="text-gray-400 text-sm">This action cannot be undone.</p>
+                        </div>
                     </div>
 
-                    <!-- Content -->
-                    <div class="mb-6">
-                        <p class="text-gray-300 mb-2">Are you sure you want to cancel this booking?</p>
-                        
-                        ${this.booking ? `
-                            <div class="bg-gray-700 rounded-lg p-3 mt-3">
-                                <div class="text-sm text-gray-300">
-                                    <div class="flex justify-between mb-1">
-                                        <span class="text-gray-400">Date:</span>
-                                        <span class="font-medium">${this.formatDate(this.booking.start_time)}</span>
-                                    </div>
-                                    <div class="flex justify-between mb-1">
-                                        <span class="text-gray-400">Time:</span>
-                                        <span class="font-medium">${this.formatTime(this.booking.start_time)} - ${this.formatTime(this.booking.end_time)}</span>
-                                    </div>
-                                    ${this.getBookingDetails()}
+                    ${this.booking ? `
+                        <div class="bg-gray-800/50 rounded-lg p-4 mb-6 border border-gray-700">
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-400">Date</span>
+                                    <span class="font-medium text-gray-200">${displayData.date}</span>
                                 </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-400">Time</span>
+                                    <span class="font-medium text-gray-200">${displayData.time}</span>
+                                </div>
+                                ${displayData.plane ? `
+                                <div class="flex justify-between">
+                                    <span class="text-gray-400">Aircraft</span>
+                                    <span class="font-medium text-white">${displayData.plane}</span>
+                                </div>` : ''}
+                                ${displayData.pilot ? `
+                                <div class="flex justify-between">
+                                    <span class="text-gray-400">Pilot</span>
+                                    <span class="font-medium text-white">${displayData.pilot}</span>
+                                </div>` : ''}
                             </div>
-                        ` : ''}
-                        
-                        <p class="text-red-400 text-sm mt-3 font-medium">This action cannot be undone.</p>
-                    </div>
+                        </div>
+                    ` : ''}
 
-                    <!-- Actions -->
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" 
-                                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors duration-200 font-medium cancel-btn"
-                                ${this.isLoading ? 'disabled' : ''}>
+                    <div class="flex gap-3 justify-end">
+                        <button type="button" id="btn-keep-booking" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm">
                             Keep Booking
                         </button>
-                        <button type="button" 
-                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors duration-200 font-medium confirm-btn flex items-center space-x-2"
-                                ${this.isLoading ? 'disabled' : ''}>
-                            ${this.isLoading ? `
-                                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Cancelling...</span>
-                            ` : `
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                                <span>Cancel Booking</span>
-                            `}
+                        <button type="button" id="btn-confirm-cancel" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium text-sm shadow-lg shadow-red-900/20 flex items-center gap-2">
+                            <span>Yes, Cancel It</span>
                         </button>
                     </div>
                 </div>
@@ -79,126 +90,116 @@ export class BookingCancelModal {
         `;
 
         document.body.appendChild(this.modal);
+
+        // Trigger Animations
+        requestAnimationFrame(() => {
+            this.modal.classList.remove('opacity-0');
+            const content = this.modal.querySelector('.modal-content');
+            content.classList.remove('scale-95', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+        });
+
         this.setupEventListeners();
     }
 
-    formatDate(dateString) {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    }
+    getDisplayData() {
+        if (!this.booking) return { date: '-', time: '-' };
 
-    formatTime(dateString) {
-        const date = new Date(dateString);
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-        });
-    }
+        const start = new Date(this.booking.start_time);
+        const end = new Date(this.booking.end_time);
 
-    getBookingDetails() {
-        if (!this.booking) return '';
+        // Normalize Plane Data
+        // 1. Try 'plane_tail_number' (from View)
+        // 2. Try 'plane.tail_number' (from Nested Object in Details Modal)
+        // 3. Fallback to empty
+        let plane = this.booking.plane_tail_number
+            || this.booking.plane?.tail_number
+            || this.booking.plane_tail
+            || '';
 
-        let details = '';
+        // Normalize Pilot Data
+        let pilot = this.booking.pilot_name
+            || this.booking.pilot?.name
+            || (this.booking.pilot ? `${this.booking.pilot.first_name} ${this.booking.pilot.last_name}` : '')
+            || '';
 
-        // Show pilot name if available
-        if (this.booking.pilot_name) {
-            details += `
-                <div class="flex justify-between mb-1">
-                    <span class="text-gray-400">Pilot:</span>
-                    <span class="font-medium">${this.booking.pilot_name}</span>
-                </div>
-            `;
-        }
-
-        // Show instructor name if available
-        if (this.booking.instructor_name && this.booking.instructor_name !== '-') {
-            details += `
-                <div class="flex justify-between mb-1">
-                    <span class="text-gray-400">Instructor:</span>
-                    <span class="font-medium">${this.booking.instructor_name}</span>
-                </div>
-            `;
-        }
-
-        // Show plane if available
-        if (this.booking.plane_tail) {
-            details += `
-                <div class="flex justify-between mb-1">
-                    <span class="text-gray-400">Plane:</span>
-                    <span class="font-medium">${this.booking.plane_tail}</span>
-                </div>
-            `;
-        }
-
-        return details;
+        return {
+            date: start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            time: `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+            plane,
+            pilot
+        };
     }
 
     setupEventListeners() {
-        // Confirm button
-        const confirmBtn = this.modal.querySelector('.confirm-btn');
-        confirmBtn.addEventListener('click', () => this.handleConfirm());
+        // Buttons
+        this.modal.querySelector('#btn-confirm-cancel').addEventListener('click', () => this.handleConfirm());
+        this.modal.querySelector('#btn-keep-booking').addEventListener('click', () => this.handleClose());
 
-        // Cancel button
-        const cancelBtn = this.modal.querySelector('.cancel-btn');
-        cancelBtn.addEventListener('click', () => this.handleCancel());
-
-        // Click outside to close
+        // Click Outside
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal && !this.isLoading) {
-                this.handleCancel();
-            }
+            if (e.target === this.modal && !this.isLoading) this.handleClose();
         });
 
-        // ESC key to close
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.modal && this.modal.parentNode && !this.isLoading) {
-                this.handleCancel();
-            }
-        });
+        // Esc Key
+        document.addEventListener('keydown', this.boundHandleEsc);
     }
+
+    handleEsc(e) {
+        if (e.key === 'Escape' && !this.isLoading) this.handleClose();
+    }
+
+    // --- ACTIONS ---
 
     async handleConfirm() {
         if (this.isLoading) return;
-
         this.isLoading = true;
-        this.updateButtonStates();
+        this.updateButtonState(true);
 
         try {
-            if (this.onConfirm) {
-                await this.onConfirm(this.booking);
-            }
-            this.close();
+            // CALL RPC
+            const { error } = await supabase.schema('api').rpc('delete_booking', {
+                booking_uuid: this.booking.id
+            });
+
+            if (error) throw error;
+
+            showToast('Booking cancelled successfully', 'success');
+
+            // Trigger Callbacks
+            if (this.onConfirm) await this.onConfirm(this.booking);
+
+            // Global Event (for Calendar/Table refresh)
+            window.dispatchEvent(new CustomEvent('refreshBookingsTable'));
+            window.dispatchEvent(new CustomEvent('bookingDeleted', { detail: { id: this.booking.id } }));
+
+            this.destroy();
+
         } catch (error) {
             console.error('Error cancelling booking:', error);
-            showToast('Error cancelling booking: ' + error.message, 'error');
+            showToast(error.message || 'Failed to cancel booking', 'error');
             this.isLoading = false;
-            this.updateButtonStates();
+            this.updateButtonState(false);
         }
     }
 
-    handleCancel() {
+    handleClose() {
         if (this.isLoading) return;
-
-        if (this.onCancel) {
-            this.onCancel();
-        }
-        this.close();
+        if (this.onCancel) this.onCancel(); // Allows parent (EditModal) to reopen if needed
+        this.destroy();
     }
 
-    updateButtonStates() {
-        const confirmBtn = this.modal.querySelector('.confirm-btn');
-        const cancelBtn = this.modal.querySelector('.cancel-btn');
+    updateButtonState(loading) {
+        const btn = this.modal.querySelector('#btn-confirm-cancel');
+        const keepBtn = this.modal.querySelector('#btn-keep-booking');
 
-        if (this.isLoading) {
-            confirmBtn.disabled = true;
-            cancelBtn.disabled = true;
-            confirmBtn.innerHTML = `
+        if (loading) {
+            keepBtn.disabled = true;
+            keepBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            btn.disabled = true;
+            btn.classList.add('cursor-not-allowed');
+            btn.innerHTML = `
                 <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -206,14 +207,12 @@ export class BookingCancelModal {
                 <span>Cancelling...</span>
             `;
         } else {
-            confirmBtn.disabled = false;
-            cancelBtn.disabled = false;
-            confirmBtn.innerHTML = `
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-                <span>Cancel Booking</span>
-            `;
+            keepBtn.disabled = false;
+            keepBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            btn.disabled = false;
+            btn.classList.remove('cursor-not-allowed');
+            btn.innerHTML = `<span>Yes, Cancel It</span>`;
         }
     }
 
@@ -221,18 +220,25 @@ export class BookingCancelModal {
         this.createModal();
     }
 
-    close() {
-        this.destroy();
-    }
-
     destroy() {
-        // Remove event listeners
-        document.removeEventListener('keydown', this.handleCancel);
+        document.removeEventListener('keydown', this.boundHandleEsc);
 
-        // Remove modal from DOM
-        if (this.modal && this.modal.parentNode) {
-            this.modal.parentNode.removeChild(this.modal);
-            this.modal = null;
+        if (this.modal) {
+            // FIX: Immediately disable mouse interaction so the underlying modal is clickable 
+            // even while this one is fading out.
+            this.modal.style.pointerEvents = 'none';
+
+            // Animate out
+            this.modal.classList.add('opacity-0');
+            const content = this.modal.querySelector('.modal-content');
+            if (content) content.classList.add('scale-95', 'opacity-0');
+
+            setTimeout(() => {
+                if (this.modal && this.modal.parentNode) {
+                    this.modal.parentNode.removeChild(this.modal);
+                }
+                this.modal = null;
+            }, 300);
         }
     }
 }

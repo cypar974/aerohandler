@@ -10,6 +10,10 @@ import { loadSubmitFlightPage, cleanupSubmitFlightPage } from "./pages/submit_fl
 import { loadSettingsPage } from "./pages/settings.js";
 import { loadStudentDetailsPage, cleanupStudentDetailsPage } from "./pages/studentdetails.js";
 import { loadInstructorDetailsPage, cleanupInstructorDetailsPage } from "./pages/instructordetails.js";
+import { loadMembersPage } from "./pages/members.js";
+import { loadMaintenancePage, cleanupMaintenancePage } from "./pages/maintenance.js";
+import { loadStaffPage, cleanupStaffPage } from "./pages/staff.js";
+import { loadMemberDetailsPage, cleanupMemberDetailsPage } from "./pages/memberdetails.js";
 
 const routes = {
     "": loadDashboardPage,
@@ -21,7 +25,11 @@ const routes = {
     "#instructors": loadInstructorsPage,
     "#finances": loadFinancePage,
     "#submit_flight": loadSubmitFlightPage,
-    "#settings": loadSettingsPage
+    "#settings": loadSettingsPage,
+    "#members": loadMembersPage,
+    "#maintenance": loadMaintenancePage,
+    "#staff": loadStaffPage,
+    "#memberdetails": loadMemberDetailsPage,
 };
 
 // Track current page and cleanup functions
@@ -35,6 +43,9 @@ const cleanupFunctions = {
     '#instructordetails': cleanupInstructorDetailsPage,
     '#submit_flight': cleanupSubmitFlightPage,
     '#finances': cleanupFinancePage,
+    '#maintenance': cleanupMaintenancePage,
+    '#staff': cleanupStaffPage,
+    '#memberdetails': cleanupMemberDetailsPage,
     // Add other page cleanup functions as needed
 };
 
@@ -132,6 +143,7 @@ function setupMenuEventListeners() {
 window.addEventListener('navigate', async (event) => {
     const page = event.detail.page;
     console.log('🧭 Programmatic navigation to:', page);
+    const backPage = event.detail.backPage || null;
 
     // Clean up current page before loading new one
     await cleanupCurrentPage();
@@ -145,11 +157,16 @@ window.addEventListener('navigate', async (event) => {
                 currentCleanup = null; // Students page doesn't have cleanup yet
                 break;
             case 'studentdetails':
-                const studentNumber = event.detail.studentNumber;
-                if (studentNumber) {
-                    window.history.pushState({}, '', `#student/${studentNumber}`);
-                    await loadStudentDetailsPage(studentNumber);
-                    currentPage = `#student/${studentNumber}`;
+                // REFACTOR: Check for studentId (UUID) first, fallback to studentNumber
+                const studentId = event.detail.studentId || event.detail.studentNumber;
+                // [Change] Capture backPage from event
+                const studentBackPage = event.detail.backPage;
+
+                if (studentId) {
+                    window.history.pushState({}, '', `#student/${studentId}`);
+                    // [Change] Pass backPage as second argument
+                    await loadStudentDetailsPage(studentId, studentBackPage);
+                    currentPage = `#student/${studentId}`;
                     currentCleanup = () => cleanupStudentDetailsPage();
                 }
                 break;
@@ -160,10 +177,15 @@ window.addEventListener('navigate', async (event) => {
                 currentCleanup = null; // Instructors page doesn't have cleanup yet
                 break;
             case 'instructordetails':
+                // REFACTOR: Ensure we grab the ID safely (expects UUID now)
                 const instructorId = event.detail.instructorId;
+
+                // [REMOVE THIS LINE] const backPage = event.detail.backPage; <--- The error is here
+
                 if (instructorId) {
                     window.history.pushState({}, '', `#instructor/${instructorId}`);
-                    await loadInstructorDetailsPage(instructorId);
+                    // Use the backPage variable already defined at the top of the event listener
+                    await loadInstructorDetailsPage(instructorId, backPage);
                     currentPage = `#instructor/${instructorId}`;
                     currentCleanup = () => cleanupInstructorDetailsPage();
                 }
@@ -191,6 +213,26 @@ window.addEventListener('navigate', async (event) => {
                 await loadSubmitFlightPage();
                 currentPage = '#submit_flight';
                 currentCleanup = () => cleanupSubmitFlightPage();
+                break;
+            case 'maintenance':
+                window.history.pushState({}, '', '#maintenance');
+                await loadMaintenancePage();
+                currentPage = '#maintenance';
+                currentCleanup = () => cleanupMaintenancePage();
+                break;
+            case 'memberdetails':
+                // Handle the object structure sent from members.js
+                // FIX: Rename backPage to memberBackPage to avoid scope conflict
+                const { memberId, type, backPage: memberBackPage } = event.detail;
+
+                // Construct the URL hash
+                window.history.pushState({}, '', `#member/${type}/${memberId}`);
+
+                // Call the loader with the new variable name
+                await loadMemberDetailsPage({ memberId, type, backPage: memberBackPage });
+
+                currentPage = `#member/${type}/${memberId}`;
+                currentCleanup = () => cleanupMemberDetailsPage();
                 break;
             default:
                 window.history.pushState({}, '', `#${page}`);
@@ -252,17 +294,37 @@ async function router() {
     await cleanupCurrentPage();
 
     // Check for student detail routes
+    // Regex matches UUIDs as well (alphanumeric + hyphens)
     const studentMatch = hash.match(/^#student\/([A-Za-z0-9-]+)$/);
     if (studentMatch) {
-        const studentNumber = studentMatch[1];
+        const studentId = studentMatch[1];
         try {
-            await loadStudentDetailsPage(studentNumber);
+            await loadStudentDetailsPage(studentId);
             currentPage = hash;
             currentCleanup = () => cleanupStudentDetailsPage();
             window.forceReload = false;
-            console.log('✅ Student details page loaded');
+            console.log('✅ Student details page loaded with ID:', studentId);
         } catch (error) {
             console.error('❌ Error loading student details:', error);
+            await loadDashboardPage();
+            currentPage = '#dashboard';
+            currentCleanup = null;
+        }
+        return;
+    }
+
+    const memberMatch = hash.match(/^#member\/([a-z_]+)\/([A-Za-z0-9-]+)$/);
+    if (memberMatch) {
+        const [_, type, memberId] = memberMatch; // Destructure regex results
+        try {
+            // Pass as positional arguments (or object if you prefer, but positional works with your updated function)
+            await loadMemberDetailsPage({ memberId, type });
+            currentPage = hash;
+            currentCleanup = () => cleanupMemberDetailsPage();
+            window.forceReload = false;
+            console.log(`✅ Member details loaded for ${type}: ${memberId}`);
+        } catch (error) {
+            console.error('❌ Error loading member details:', error);
             await loadDashboardPage();
             currentPage = '#dashboard';
             currentCleanup = null;
@@ -279,7 +341,7 @@ async function router() {
             currentPage = hash;
             currentCleanup = () => cleanupInstructorDetailsPage();
             window.forceReload = false;
-            console.log('✅ Instructor details page loaded');
+            console.log('✅ Instructor details page loaded with ID:', instructorId);
         } catch (error) {
             console.error('❌ Error loading instructor details:', error);
             await loadDashboardPage();

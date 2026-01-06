@@ -14,15 +14,15 @@ export async function loadDashboardPage() {
             fetchActiveAircraft(),
             fetchUpcomingBookings(),
             fetchFlightHoursThisMonth(),
-            fetchFinancialMetrics() // NEW: Get financial data from new system
+            fetchFinancialMetrics()
         ]);
 
+        // UI RENDERING - PRESERVED EXACTLY AS IS
         document.getElementById("main-content").innerHTML = `
             <div class="p-6 bg-gray-900 text-white min-h-full">
                 <h1 class="text-3xl font-bold mb-2">AeroClub Dashboard</h1>
                 <p class="text-gray-400 mb-6">Welcome back! Here's your overview:</p>
 
-                <!-- Stats Overview -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div class="bg-gray-800 p-6 rounded-xl shadow hover:shadow-gray-700 transition cursor-pointer" onclick="window.location.hash = '#students'">
                         <h2 class="text-sm font-medium text-gray-400">Total Students</h2>
@@ -46,7 +46,6 @@ export async function loadDashboardPage() {
                     </div>
                 </div>
 
-                <!-- Financial Overview - NEW SECTION -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                     <div class="bg-gray-800 p-6 rounded-xl shadow hover:shadow-gray-700 transition cursor-pointer" onclick="window.location.hash = '#finances'">
                         <h2 class="text-sm font-medium text-gray-400">Pending Receivable</h2>
@@ -67,9 +66,7 @@ export async function loadDashboardPage() {
                     </div>
                 </div>
 
-                <!-- Quick Actions & Recent Activity -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Quick Actions -->
                     <div class="bg-gray-800 p-6 rounded-xl shadow">
                         <h2 class="text-xl font-semibold mb-4 text-white">Quick Actions</h2>
                         <div class="grid grid-cols-2 gap-4">
@@ -92,7 +89,6 @@ export async function loadDashboardPage() {
                         </div>
                     </div>
 
-                    <!-- Recent Financial Activity - UPDATED -->
                     <div class="bg-gray-800 p-6 rounded-xl shadow">
                         <h2 class="text-xl font-semibold mb-4 text-white">Recent Financial Activity</h2>
                         <div class="space-y-3 max-h-64 overflow-y-auto">
@@ -122,7 +118,6 @@ export async function loadDashboardPage() {
                     </div>
                 </div>
 
-                <!-- System Status -->
                 <div class="mt-8 bg-gray-800 p-6 rounded-xl shadow">
                     <h2 class="text-xl font-semibold mb-4 text-white">System Status</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -153,15 +148,24 @@ export async function loadDashboardPage() {
     }, 100);
 }
 
-// Database functions - UPDATED for new payment system
+// =========================================================
+// DATA LAYER (Refactored for Role-Segregated Schema)
+// =========================================================
+
 async function fetchTotalStudents() {
     try {
-        const { count, error } = await supabase
-            .from('students')
-            .select('*', { count: 'exact', head: true });
+        // "Secure Function" Rule: Direct access to views is blocked.
+        // We must use the secure RPC function that handles permission logic.
+        const { data, error } = await supabase
+            .schema('api')
+            .rpc('get_members');
 
         if (error) throw error;
-        return count || 0;
+
+        // Filter the returned member list for students and count them
+        const studentCount = data ? data.filter(m => m.type === 'student').length : 0;
+
+        return studentCount;
     } catch (error) {
         console.error('Error fetching students:', error);
         return 'Error';
@@ -169,119 +173,134 @@ async function fetchTotalStudents() {
 }
 
 async function fetchActiveAircraft() {
-    const { count, error } = await supabase
-        .from('planes')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'available');
+    try {
+        // RPC Rule: Use the API function because direct access to 'planes' table is restricted.
+        const { data, error } = await supabase.schema('api').rpc('get_available_planes');
 
-    if (error) {
+        if (error) throw error;
+        // In "Demo" mode, we calculate count in JS since RPC returns the set
+        return data ? data.length : 0;
+    } catch (error) {
         console.error('Error fetching aircraft:', error);
         return 'Error';
     }
-
-    return count || 0;
 }
 
 async function fetchUpcomingBookings() {
-    const today = new Date().toISOString();
+    try {
+        const today = new Date().toISOString();
 
-    const { count, error } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .gte('start_time', today);
+        // RPC Rule: Use the API function to respect RLS/Schema restrictions.
+        // We fetch bookings and filter in memory for the demo. 
+        // Note: For production with large data, we would add a specific RPC param for date.
+        const { data, error } = await supabase.schema('api').rpc('get_bookings');
 
-    if (error) {
+        if (error) throw error;
+
+        // Filter for upcoming
+        const count = data.filter(b => b.start_time >= today).length;
+        return count;
+    } catch (error) {
         console.error('Error fetching bookings:', error);
         return 'Error';
     }
-
-    return count || 0;
 }
 
-// In dashboard.js - update fetchFlightHoursThisMonth function
 async function fetchFlightHoursThisMonth() {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-    const { data, error } = await supabase
-        .from('flight_logs')
-        .select('flight_duration')
-        .gte('flight_date', startOfMonth)
-        .lte('flight_date', endOfMonth);
-
-    if (error) {
-        console.error('Error fetching flight hours:', error);
-        return 'Error';
-    }
-
-    const totalHours = data.reduce((sum, flight) => sum + (flight.flight_duration || 0), 0);
-    return Math.round(totalHours * 10) / 10;
-}
-
-// NEW: Fetch financial metrics from the updated payment system
-async function fetchFinancialMetrics() {
     try {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-        // Get pending receivable (money owed to club)
-        const { data: pendingReceivable, error: receivableError } = await supabase
-            .from('payments_receivable')
-            .select('amount')
-            .eq('status', 'pending');
+        // RPC Rule: Use the API function
+        const { data, error } = await supabase.schema('api').rpc('get_flight_logs');
 
-        // Get pending payable (money club owes)
-        const { data: pendingPayable, error: payableError } = await supabase
-            .from('payments_payable')
-            .select('amount')
-            .eq('status', 'pending');
+        if (error) throw error;
 
-        // Get recent transactions for this month
-        const { data: recentTransactions, error: transactionsError } = await supabase
-            .from('transaction_history')
-            .select('*')
-            .gte('payment_date', startOfMonth)
-            .order('payment_date', { ascending: false })
-            .limit(5);
+        // Filter and Sum in JS (Demo Mode)
+        const totalHours = data
+            .filter(flight =>
+                flight.flight_date >= startOfMonth &&
+                flight.flight_date <= endOfMonth
+            )
+            .reduce((sum, flight) => sum + (Number(flight.flight_duration) || 0), 0);
 
-        if (receivableError || payableError || transactionsError) {
-            console.error('Error fetching financial metrics:', receivableError || payableError || transactionsError);
-            return getDefaultFinancialData();
-        }
+        return Math.round(totalHours * 10) / 10;
+    } catch (error) {
+        console.error('Error fetching flight hours:', error);
+        return 'Error';
+    }
+}
 
-        // In fetchFinancialMetrics function, replace the calculation part:
-        const pendingReceivableTotal = pendingReceivable.reduce((sum, p) => {
-            const amount = parseFloat(p.amount) || 0;
-            return sum + amount;
-        }, 0);
+async function fetchFinancialMetrics() {
+    try {
+        // 1. Fetch from the new Smart View
+        // This view consolidates all transactions and is safe for reading.
+        const { data: ledger, error } = await supabase
+            .schema('api')
+            .rpc('get_financial_ledger');
 
-        const pendingPayableTotal = pendingPayable.reduce((sum, p) => {
-            const amount = parseFloat(p.amount) || 0;
-            return sum + amount;
-        }, 0);
+        if (error) throw error;
 
-        // Similarly for monthly income/expenses calculations:
-        const monthlyIncome = recentTransactions
-            .filter(t => t.transaction_type === 'incoming')
-            .reduce((sum, t) => {
-                const amount = parseFloat(t.amount) || 0;
-                return sum + amount;
-            }, 0);
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const monthlyExpenses = recentTransactions
-            .filter(t => t.transaction_type === 'outgoing')
-            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        // 2. Process data in JS (Logic Lock: Calculate to match old UI requirements)
+
+        // Metrics: Pending Receivable (Owed TO Club)
+        const pendingReceivable = ledger
+            .filter(t => t.transaction_direction === 'receivable' && t.status === 'pending')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const pendingReceivableCount = ledger
+            .filter(t => t.transaction_direction === 'receivable' && t.status === 'pending').length;
+
+        // Metrics: Pending Payable (Owed BY Club)
+        const pendingPayable = ledger
+            .filter(t => t.transaction_direction === 'payable' && t.status === 'pending')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const pendingPayableCount = ledger
+            .filter(t => t.transaction_direction === 'payable' && t.status === 'pending').length;
+
+        // Metrics: Net Cash Flow (This Month)
+        // We only count 'paid' status for cash flow
+        const thisMonthTransactions = ledger.filter(t => {
+            const txDate = new Date(t.created_at || t.due_date);
+            return txDate >= startOfMonth && t.status === 'paid';
+        });
+
+        const monthlyIncome = thisMonthTransactions
+            .filter(t => t.transaction_direction === 'receivable')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const monthlyExpenses = thisMonthTransactions
+            .filter(t => t.transaction_direction === 'payable')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const netCashFlow = monthlyIncome - monthlyExpenses;
 
+        // 3. Map Recent Transactions for UI
+        // The UI expects 'transaction_type' to be 'incoming' or 'outgoing'.
+        // The SQL returns 'transaction_direction' as 'receivable' or 'payable'.
+        const recentTransactions = ledger
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5)
+            .map(t => ({
+                description: t.description || 'Transaction',
+                amount: Number(t.amount),
+                // Data Adaptation: Map SQL Enum to UI String
+                transaction_type: t.transaction_direction === 'receivable' ? 'incoming' : 'outgoing',
+                payment_date: t.created_at || t.due_date
+            }));
+
         return {
-            pendingReceivable: pendingReceivableTotal,
-            pendingReceivableCount: pendingReceivable.length,
-            pendingPayable: pendingPayableTotal,
-            pendingPayableCount: pendingPayable.length,
-            netCashFlow: netCashFlow,
-            recentTransactions: recentTransactions || []
+            pendingReceivable,
+            pendingReceivableCount,
+            pendingPayable,
+            pendingPayableCount,
+            netCashFlow,
+            recentTransactions
         };
 
     } catch (error) {
@@ -301,7 +320,7 @@ function getDefaultFinancialData() {
     };
 }
 
-// Fallback function in case database is unavailable
+// Fallback function in case database is unavailable (Preserved)
 function loadFallbackDashboard() {
     document.getElementById("main-content").innerHTML = `
         <div class="p-6 bg-gray-900 text-white min-h-full">
@@ -312,7 +331,6 @@ function loadFallbackDashboard() {
                 <p class="text-yellow-200">Unable to fetch live data. Showing cached information.</p>
             </div>
 
-            <!-- Stats Overview with fallback numbers -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div class="bg-gray-800 p-6 rounded-xl shadow hover:shadow-gray-700 transition" onclick="window.location.hash = '#students'">
                     <h2 class="text-sm font-medium text-gray-400">Total Students</h2>
@@ -336,7 +354,6 @@ function loadFallbackDashboard() {
                 </div>
             </div>
 
-            <!-- Financial Overview Fallback -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 <div class="bg-gray-800 p-6 rounded-xl shadow hover:shadow-gray-700 transition">
                     <h2 class="text-sm font-medium text-gray-400">Pending Receivable</h2>
@@ -355,9 +372,7 @@ function loadFallbackDashboard() {
                 </div>
             </div>
 
-            <!-- Quick Actions & Recent Activity -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Quick Actions -->
                 <div class="bg-gray-800 p-6 rounded-xl shadow">
                     <h2 class="text-xl font-semibold mb-4 text-white">Quick Actions</h2>
                     <div class="grid grid-cols-2 gap-4">
@@ -380,7 +395,6 @@ function loadFallbackDashboard() {
                     </div>
                 </div>
 
-                <!-- Recent Financial Activity Fallback -->
                 <div class="bg-gray-800 p-6 rounded-xl shadow">
                     <h2 class="text-xl font-semibold mb-4 text-white">Recent Financial Activity</h2>
                     <div class="space-y-3">

@@ -429,3 +429,18 @@
 .tab-receivable:hover {
     transform: translateY(-1px);
 }
+
+/* ===============================
+   🔍 Autocomplete Scrollbar
+================================= */
+.autocomplete-suggestions::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
+}
+
+.autocomplete-suggestions {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}

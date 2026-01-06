@@ -2,14 +2,20 @@
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { loadStudentDetailsPage } from "./studentdetails.js";
+import { Autocomplete } from "../components/autocomplete.js";
 
 let studentsData = [];
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "first_name", query: "" };
 let currentPage = 1;
 const rowsPerPage = 10;
+let searchAutocomplete = null; // Reference to the Autocomplete instance
 
 export async function loadStudentsPage() {
+    // --- DEMO MODE: PERMISSIONS FLAG ---
+    const canManageStudents = true; // Mock Admin permission
+    // -----------------------------------
+
     document.getElementById("main-content").innerHTML = /*html */ `
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
             <div>
@@ -26,25 +32,26 @@ export async function loadStudentsPage() {
                         <option value="student_number">Student Number</option>
                         <option value="membership_status">Status</option>
                     </select>
-                    <div class="relative">
-                        <input type="text" id="search-box" placeholder="Search students..." class="pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full lg:w-64">
-                        <div class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                    <div class="relative w-full lg:w-64">
+                        <input type="text" id="search-box" placeholder="Search students..." class="pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full">
+                        <div class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
                         </div>
                     </div>
                 </div>
+                ${canManageStudents ? `
                 <button id="add-student-btn" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-500 hover:to-blue-600 transition-all duration-200 font-medium flex items-center gap-2 justify-center">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
                     Add Student
                 </button>
+                ` : ''}
             </div>
         </div>
 
-        <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-xl shadow-lg">
                 <div class="text-blue-200 text-sm font-medium">Total Students</div>
@@ -64,7 +71,6 @@ export async function loadStudentsPage() {
             </div>
         </div>
 
-        <!-- Table Container -->
         <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-white">
@@ -113,13 +119,11 @@ export async function loadStudentsPage() {
                 </table>
             </div>
             
-            <!-- Loading State -->
             <div id="loading-state" class="hidden p-8 text-center">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
                 <p class="text-gray-400 mt-4">Loading students...</p>
             </div>
 
-            <!-- Empty State -->
             <div id="empty-state" class="hidden p-8 text-center">
                 <svg class="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
@@ -134,7 +138,6 @@ export async function loadStudentsPage() {
 
         <div id="pagination" class="flex justify-center items-center mt-6 space-x-2"></div>
 
-        <!-- Add Student Modal -->
         <div id="student-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
             <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl">
                 <div class="flex justify-between items-center mb-6">
@@ -146,7 +149,6 @@ export async function loadStudentsPage() {
                     </button>
                 </div>
                 <form id="add-student-form" class="space-y-6">
-                    <!-- Mandatory Info -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Mandatory Information</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -179,7 +181,6 @@ export async function loadStudentsPage() {
                         </div>
                     </fieldset>
 
-                    <!-- Secondary Info -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Additional Information</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -210,12 +211,15 @@ export async function loadStudentsPage() {
         </div>
     `;
 
-    await fetchStudents();
+
     setupEventListeners();
+    await fetchStudents();
 }
 
 function setupEventListeners() {
-    document.getElementById("add-student-btn").addEventListener("click", showAddModal);
+    const addBtn = document.getElementById("add-student-btn");
+    if (addBtn) addBtn.addEventListener("click", showAddModal);
+
     document.getElementById("empty-add-btn").addEventListener("click", showAddModal);
     document.getElementById("close-modal").addEventListener("click", hideAddModal);
     document.getElementById("cancel-btn").addEventListener("click", hideAddModal);
@@ -232,16 +236,34 @@ function setupEventListeners() {
         await addStudent();
     });
 
+    // --- REVISITED AUTOCOMPLETE IMPLEMENTATION ---
     const searchBox = document.getElementById("search-box");
-    let searchTimeout;
-    searchBox.addEventListener("input", e => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            searchState.query = e.target.value.toLowerCase();
-            currentPage = 1;
-            renderTable();
-        }, 300);
-    });
+
+    // We initialize the Autocomplete component on the search box.
+    // This allows real-time filtering (via onInput) AND smart suggestions.
+    if (searchBox) {
+        searchAutocomplete = new Autocomplete({
+            inputElement: searchBox,
+            dataSource: [], // Will be populated in fetchStudents
+            allowedTypes: ['student'], // Strict type checking using the new feature
+            displayField: 'name', // Constructed field
+            valueField: 'id',
+            additionalFields: ['email', 'student_number'],
+            placeholder: 'Search by name or email...',
+            // 1. Filter the table as the user types
+            onInput: (query) => {
+                searchState.query = query.toLowerCase();
+                currentPage = 1;
+                renderTable();
+            },
+            // 2. Navigate immediately if a user clicks a suggestion
+            onSelect: (item) => {
+                if (item && item.rawItem && item.rawItem.id) {
+                    navigateToStudent(item.rawItem.id); // <--- Passing UUID
+                }
+            }
+        });
+    }
 
     document.getElementById("search-column").addEventListener("change", e => {
         searchState.column = e.target.value;
@@ -249,7 +271,6 @@ function setupEventListeners() {
         renderTable();
     });
 
-    // In setupEventListeners, change the Escape listener to:
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             const modal = document.getElementById("student-modal");
@@ -290,13 +311,31 @@ function hideAddModal() {
 async function fetchStudents() {
     showLoading(true);
     try {
-        const { data, error, count } = await supabase
-            .from("students")
-            .select("*", { count: 'exact' });
+        const { data, error } = await supabase.schema('api').rpc('get_students');
 
         if (!error) {
-            studentsData = data;
-            updateStatsCards(data);
+            // NORMALIZE DATA
+            studentsData = data.map(s => ({
+                ...s,
+                membership_status: s.membership_status || 'active',
+                pending_payments: s.pending_payments || 0,
+                total_hours: s.total_hours || 0
+            }));
+
+            // --- UPDATE AUTOCOMPLETE DATA ---
+            if (searchAutocomplete) {
+                // Map the data to fit the Autocomplete schema
+                // We add a 'name' field and strictly set 'type' to 'student'
+                // to ensure the allowedTypes filter works correctly.
+                const autocompleteData = studentsData.map(s => ({
+                    ...s,
+                    name: `${s.first_name} ${s.last_name}`,
+                    type: 'student'
+                }));
+                searchAutocomplete.updateData(autocompleteData);
+            }
+
+            updateStatsCards(studentsData);
             renderTable();
         } else {
             console.error('Error fetching students:', error);
@@ -314,7 +353,6 @@ function updateStatsCards(students) {
     const total = students.length;
     const active = students.filter(s => s.membership_status === 'active').length;
 
-    // Calculate actual pending payments from database
     const pendingPaymentsTotal = students.reduce((sum, student) => {
         return sum + (student.pending_payments || 0);
     }, 0);
@@ -348,6 +386,15 @@ function renderTable() {
     // Filter by search
     let filteredData = studentsData.filter(student => {
         if (!searchState.query) return true;
+
+        // If searching via Autocomplete/Searchbox (first_name + last_name check)
+        // or specific columns via dropdown
+        if (searchState.column === 'first_name') {
+            // "Smart" search: check full name concatenation if default column is selected
+            const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+            if (fullName.includes(searchState.query)) return true;
+        }
+
         const value = (student[searchState.column] || "").toString().toLowerCase();
         return value.includes(searchState.query);
     });
@@ -453,16 +500,12 @@ function renderTable() {
     // Add click listeners
     tableBody.querySelectorAll('tr[data-id]').forEach(row => {
         row.addEventListener('click', (e) => {
+            // Prevent navigation if clicking action buttons (View/Edit/Delete)
             if (!e.target.closest('button')) {
                 const studentId = row.getAttribute('data-id');
-                const student = studentsData.find(s => s.id === studentId);
-                if (student && student.student_number) {
-                    window.dispatchEvent(new CustomEvent('navigate', {
-                        detail: {
-                            page: 'studentdetails',
-                            studentNumber: student.student_number
-                        }
-                    }));
+                // JUST pass the ID. No "student_number || id" check needed.
+                if (studentId) {
+                    navigateToStudent(studentId);
                 }
             }
         });
@@ -473,14 +516,9 @@ function renderTable() {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const studentId = btn.getAttribute('data-id');
-            const student = studentsData.find(s => s.id === studentId);
-            if (student && student.student_number) {
-                window.dispatchEvent(new CustomEvent('navigate', {
-                    detail: {
-                        page: 'studentdetails',
-                        studentNumber: student.student_number
-                    }
-                }));
+            // Just pass the ID
+            if (studentId) {
+                navigateToStudent(studentId);
             }
         });
     });
@@ -502,7 +540,17 @@ function renderTable() {
     });
 
     updateSortArrows();
-    renderPagination(totalPages);
+    renderPagination(totalPages, filteredData.length);
+}
+
+function navigateToStudent(studentId) {      // <--- 1. Rename parameter to studentId
+    window.dispatchEvent(new CustomEvent('navigate', {
+        detail: {
+            page: 'studentdetails',
+            studentId: studentId,            // <--- 2. Now this works
+            backPage: 'students'
+        }
+    }));
 }
 
 function toggleSort(column) {
@@ -536,24 +584,22 @@ function updateSortArrows() {
     });
 }
 
-function renderPagination(totalPages) {
+function renderPagination(totalPages, totalItems) { // <--- ADD totalItems parameter
     const pagination = document.getElementById("pagination");
 
-    if (totalPages <= 1) {
-        pagination.innerHTML = `
-            <div class="text-sm text-gray-400">
-                Showing ${studentsData.length} student${studentsData.length !== 1 ? 's' : ''}
-            </div>
-        `;
+    // If no items, clear pagination
+    if (totalItems === 0) {
+        pagination.innerHTML = '';
         return;
     }
 
+    // Dynamic Calculation using the passed totalItems
     const startItem = (currentPage - 1) * rowsPerPage + 1;
-    const endItem = Math.min(currentPage * rowsPerPage, studentsData.length);
+    const endItem = Math.min(currentPage * rowsPerPage, totalItems);
 
     let buttons = `
         <div class="text-sm text-gray-400">
-            Showing ${startItem}-${endItem} of ${studentsData.length} students
+            Showing ${startItem}-${endItem} of ${totalItems} students
         </div>
         <div class="flex gap-1">
     `;
@@ -652,15 +698,13 @@ async function addStudent() {
         const phone = document.getElementById("student-phone").value.trim();
         const license = document.getElementById("license-number").value.trim();
 
-        // Fetch the max student number
-        const { data: allStudents, error: fetchError } = await supabase
-            .from("students")
-            .select("student_number");
+        // 1. Calculate Student Number
+        const { data: allStudents, error: fetchError } = await supabase.schema('api').rpc('get_students');
 
         if (fetchError) throw fetchError;
 
         let nextStudentNumber = 1;
-        if (allStudents.length > 0) {
+        if (allStudents && allStudents.length > 0) {
             const numbers = allStudents
                 .map(s => parseInt(s.student_number))
                 .filter(n => !isNaN(n));
@@ -669,27 +713,53 @@ async function addStudent() {
             }
         }
 
-        const { error } = await supabase.from("students").insert([{
+        const payload = {
             first_name: firstName,
             last_name: lastName,
             email: email,
             date_of_birth: dob,
+            student_number: nextStudentNumber.toString().padStart(4, '0'),
             phone: phone,
             license_number: license,
-            student_number: nextStudentNumber.toString().padStart(4, '0'),
             join_date: new Date().toISOString().split('T')[0],
             membership_status: 'active'
-        }]);
+        };
+
+        // 2. Insert into Database (Create Auth User + Profile)
+        const { error } = await supabase.schema('api').rpc('insert_student', { payload });
 
         if (error) throw error;
 
+        // ============================================================
+        // 3. 📧 SEND PASSWORD RESET EMAIL (The Bridge Logic)
+        // ============================================================
+        try {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                // This dynamically sets the URL to your Vercel or Localhost
+                redirectTo: window.location.origin + '/update-password.html'
+            });
+
+            if (resetError) {
+                console.error("User created, but email failed:", resetError);
+                showToast("Student saved, but Invite Email failed: " + resetError.message, "warning");
+            } else {
+                showToast("Student saved & Invite Email sent!", "success");
+            }
+        } catch (emailErr) {
+            console.error("Unexpected email error:", emailErr);
+            showToast("Student saved, but Invite Email failed.", "warning");
+        }
+        // ============================================================
+
         hideAddModal();
         await fetchStudents();
-        showToast("Student added successfully!", "success");
+        // showToast("Student added successfully!", "success"); // Removed to avoid double toasts
 
     } catch (error) {
-        console.error('Error adding student:', error);
-        showToast("Error adding student: " + error.message, "error");
+        console.error('Error adding student:', JSON.stringify(error, null, 2));
+
+        const message = error.message || error.error_description || error.details || "Unknown error";
+        showToast("Error adding student: " + message, "error");
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
@@ -702,10 +772,7 @@ async function deleteStudent(studentId) {
     }
 
     try {
-        const { error } = await supabase
-            .from("students")
-            .delete()
-            .eq("id", studentId);
+        const { error } = await supabase.schema('api').rpc('delete_student', { student_uuid: studentId });
 
         if (error) throw error;
 
@@ -719,14 +786,17 @@ async function deleteStudent(studentId) {
 
 async function editStudent(studentId) {
     try {
-        const { data: student, error } = await supabase
-            .from("students")
-            .select("*")
-            .eq("id", studentId)
-            .single();
+        const { data: students, error } = await supabase.schema('api').rpc('get_student_by_id', { student_uuid: studentId });
 
         if (error) throw error;
-        showEditModal(student);
+        // RPC returns an array (SETOF), take the first one
+        const student = students && students.length > 0 ? students[0] : null;
+
+        if (student) {
+            showEditModal(student);
+        } else {
+            showToast("Student not found", "error");
+        }
     } catch (error) {
         console.error('Error loading student for edit:', error);
         showToast("Error loading student data", "error");
@@ -736,7 +806,7 @@ async function editStudent(studentId) {
 function showEditModal(student) {
     const modalHtml = `
         <div id="edit-student-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold">Edit Student</h2>
                     <button id="close-edit-modal" class="text-gray-400 hover:text-white transition-colors">
@@ -746,7 +816,6 @@ function showEditModal(student) {
                     </button>
                 </div>
                 <form id="edit-student-form" class="space-y-6">
-                    <!-- Basic Information -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Basic Information</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -791,7 +860,6 @@ function showEditModal(student) {
                         </div>
                     </fieldset>
 
-                    <!-- Contact & Emergency Info -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Contact & Emergency</legend>
                         <div class="grid grid-cols-1 gap-4 mt-2">
@@ -812,7 +880,6 @@ function showEditModal(student) {
                         </div>
                     </fieldset>
 
-                    <!-- License & Medical -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">License & Medical</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -909,7 +976,6 @@ async function updateStudent(studentId) {
             Updating...
         `;
 
-        // Get basic info
         const firstName = document.getElementById("edit-student-first-name").value.trim();
         const lastName = document.getElementById("edit-student-last-name").value.trim();
         const email = document.getElementById("edit-student-email").value.trim();
@@ -931,7 +997,6 @@ async function updateStudent(studentId) {
             return;
         }
 
-        // Get additional fields
         const phone = document.getElementById("edit-student-phone").value.trim();
         const license = document.getElementById("edit-license-number").value.trim();
         const membershipStatus = document.getElementById("edit-membership-status")?.value;
@@ -941,8 +1006,7 @@ async function updateStudent(studentId) {
         const emergencyContact = document.getElementById("edit-emergency-contact")?.value.trim();
         const emergencyPhone = document.getElementById("edit-emergency-phone")?.value.trim();
 
-        // Prepare update data
-        const updateData = {
+        const updatePayload = {
             first_name: firstName,
             last_name: lastName,
             email: email,
@@ -952,25 +1016,23 @@ async function updateStudent(studentId) {
             updated_at: new Date().toISOString()
         };
 
-        // Add optional fields if they exist in the form
-        if (membershipStatus) updateData.membership_status = membershipStatus;
-        if (licenseExpiry) updateData.license_expiry = licenseExpiry;
-        if (medicalExpiry) updateData.medical_expiry = medicalExpiry;
-        if (address) updateData.address = address;
-        if (emergencyContact) updateData.emergency_contact_name = emergencyContact;
-        if (emergencyPhone) updateData.emergency_contact_phone = emergencyPhone;
+        if (membershipStatus) updatePayload.membership_status = membershipStatus;
+        if (licenseExpiry) updatePayload.license_expiry = licenseExpiry;
+        if (medicalExpiry) updatePayload.medical_expiry = medicalExpiry;
+        if (address) updatePayload.address = address;
+        if (emergencyContact) updatePayload.emergency_contact_name = emergencyContact;
+        if (emergencyPhone) updatePayload.emergency_contact_phone = emergencyPhone;
 
-        // Remove empty fields to avoid overwriting with empty values
-        Object.keys(updateData).forEach(key => {
-            if (updateData[key] === '' || updateData[key] === null) {
-                delete updateData[key];
+        Object.keys(updatePayload).forEach(key => {
+            if (updatePayload[key] === '' || updatePayload[key] === null) {
+                delete updatePayload[key];
             }
         });
 
-        const { error } = await supabase
-            .from("students")
-            .update(updateData)
-            .eq("id", studentId);
+        const { error } = await supabase.schema('api').rpc('update_student', {
+            student_uuid: studentId,
+            payload: updatePayload
+        });
 
         if (error) throw error;
 
@@ -984,21 +1046,6 @@ async function updateStudent(studentId) {
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
-    }
-}
-
-function loadStudentProfile(studentId) {
-    // Find the student in the current data to get their student_number
-    const student = studentsData.find(s => s.id === studentId);
-    if (student && student.student_number) {
-        window.dispatchEvent(new CustomEvent('navigate', {
-            detail: {
-                page: 'studentdetails',
-                studentNumber: student.student_number // Send student_number instead of ID
-            }
-        }));
-    } else {
-        showToast('Cannot load student profile', 'error');
     }
 }
 

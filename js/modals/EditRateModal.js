@@ -1,13 +1,15 @@
 // ./modals/EditRateModal.js
-import { supabase } from "../../supabase.js";
+import { supabase } from "../supabase.js";
 import { showToast } from "../utils/showToast.js";
+import { Autocomplete } from "../js/components/autocomplete.js";
 
 export class EditRateModal {
     constructor() {
         this.modal = null;
         this.onRateSaved = null;
         this.currentRateId = null;
-        this.planesData = [];
+        this.planesData = []; // Stores plane_models
+        this.modelAutocomplete = null; // Instance of the Autocomplete class
     }
 
     show(rateData, onRateSaved = null) {
@@ -16,15 +18,24 @@ export class EditRateModal {
 
         // Create modal if it doesn't exist
         if (!this.modal) {
-            this.createModal();
+            this.createModal().then(() => {
+                if (rateData) {
+                    this.populateData(rateData);
+                }
+                this.modal.classList.remove('hidden');
+            });
+        } else {
+            // If modal exists, ensure data is fresh
+            this.loadPlaneModels().then(() => {
+                if (this.modelAutocomplete) {
+                    this.modelAutocomplete.updateData(this.planesData);
+                }
+                if (rateData) {
+                    this.populateData(rateData);
+                }
+                this.modal.classList.remove('hidden');
+            });
         }
-
-        // Populate data
-        if (rateData) {
-            this.populateData(rateData);
-        }
-
-        this.modal.classList.remove('hidden');
     }
 
     hide() {
@@ -35,11 +46,15 @@ export class EditRateModal {
     }
 
     async createModal() {
-        await this.loadPlanes();
+        // Load models first
+        await this.loadPlaneModels();
 
         this.modal = document.createElement('div');
         this.modal.id = 'edit-rate-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+
+        const canEdit = true; // Todo: Check permissions
+
         this.modal.innerHTML = `
             <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-6">
@@ -54,14 +69,14 @@ export class EditRateModal {
                 <form id="edit-rate-form" class="space-y-4">
                     <input type="hidden" id="edit-rate-id">
                     
-                    <div>
+                    <div class="relative">
                         <label class="block mb-1 text-sm font-medium text-gray-300">Aircraft Model</label>
-                        <select id="edit-rate-aircraft-model" class="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none" required>
-                            <option value="">Select Aircraft Model</option>
-                            ${this.planesData.map(plane => `
-                                <option value="${plane.model}">${plane.model}</option>
-                            `).join('')}
-                        </select>
+                        <input type="text" 
+                               id="edit-rate-aircraft-model-input" 
+                               class="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none" 
+                               placeholder="Search Aircraft Model..." 
+                               autocomplete="off">
+                        <input type="hidden" id="edit-rate-aircraft-model" required>
                     </div>
 
                     <div>
@@ -100,48 +115,79 @@ export class EditRateModal {
                         <button type="button" id="cancel-edit-rate" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors">
                             Cancel
                         </button>
+                        ${canEdit ? `
                         <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors">
                             Update Rate
                         </button>
+                        ` : ''}
                     </div>
                 </form>
             </div>
         `;
 
         document.body.appendChild(this.modal);
+
+        // Initialize the autocomplete logic
+        this.setupAutocomplete();
         this.setupEventListeners();
     }
 
-    async loadPlanes() {
+    async loadPlaneModels() {
         try {
-            const { data, error } = await supabase.from("planes").select("*");
+            const { data, error } = await supabase.schema('api').rpc('get_plane_models');
             if (!error) {
                 this.planesData = data || [];
+            } else {
+                console.error('Error loading plane models:', error);
             }
         } catch (error) {
-            console.error('Error loading planes:', error);
+            console.error('Error loading plane models:', error);
         }
     }
 
+    setupAutocomplete() {
+        const inputElement = document.getElementById('edit-rate-aircraft-model-input');
+        const hiddenElement = document.getElementById('edit-rate-aircraft-model');
+
+        if (!inputElement) return;
+
+        this.modelAutocomplete = new Autocomplete({
+            inputElement: inputElement,
+            dataSource: this.planesData,
+            allowedTypes: null, // No type filtering needed for planes
+            displayField: 'model_name', // Match the database column for plane name
+            valueField: 'id',
+            additionalFields: [], // No extra fields like email needed here
+            placeholder: 'Search Aircraft Model...',
+            onSelect: (selected) => {
+                if (hiddenElement) {
+                    hiddenElement.value = selected.id;
+                }
+            },
+            onInput: (query) => {
+                // Clear hidden ID if user clears the text
+                if (!query.trim() && hiddenElement) {
+                    hiddenElement.value = "";
+                }
+            }
+        });
+    }
+
     setupEventListeners() {
-        // Close modal events
         document.getElementById('close-edit-rate-modal').addEventListener('click', () => this.hide());
         document.getElementById('cancel-edit-rate').addEventListener('click', () => this.hide());
 
-        // Close on backdrop click
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal) {
                 this.hide();
             }
         });
 
-        // Rate type change handler
         document.getElementById('edit-rate-type').addEventListener('change', (e) => {
             const showNameField = e.target.value === 'other';
             document.getElementById('edit-rate-name-container').classList.toggle('hidden', !showNameField);
         });
 
-        // Form submission
         document.getElementById('edit-rate-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             await this.saveRate();
@@ -150,19 +196,33 @@ export class EditRateModal {
 
     populateData(rateData) {
         document.getElementById('edit-rate-id').value = rateData.id || '';
-        document.getElementById('edit-rate-aircraft-model').value = rateData.aircraft_type || '';
+
+        // 1. Set Hidden ID
+        const modelId = rateData.model_id || '';
+        document.getElementById('edit-rate-aircraft-model').value = modelId;
+
+        // 2. Set Visible Text (Find model name from ID)
+        if (modelId && this.planesData.length > 0) {
+            const selectedModel = this.planesData.find(p => p.id === modelId);
+            if (selectedModel) {
+                document.getElementById('edit-rate-aircraft-model-input').value = selectedModel.model_name;
+            } else {
+                document.getElementById('edit-rate-aircraft-model-input').value = 'Unknown Model';
+            }
+        } else {
+            document.getElementById('edit-rate-aircraft-model-input').value = '';
+        }
+
         document.getElementById('edit-rate-type').value = rateData.rate_type || '';
         document.getElementById('edit-rate-amount').value = rateData.amount || '';
         document.getElementById('edit-rate-description').value = rateData.description || '';
-        document.getElementById('edit-rate-is-active').checked = rateData.is_active || false;
+        document.getElementById('edit-rate-is-active').checked = rateData.is_active !== false;
 
-        // Handle rate name for 'other' type
         if (rateData.rate_type === 'other') {
             document.getElementById('edit-rate-name').value = rateData.rate_name || '';
             document.getElementById('edit-rate-name-container').classList.remove('hidden');
         }
 
-        // Trigger rate type change to show/hide name field
         document.getElementById('edit-rate-type').dispatchEvent(new Event('change'));
     }
 
@@ -170,28 +230,41 @@ export class EditRateModal {
         if (this.modal) {
             document.getElementById('edit-rate-form').reset();
             document.getElementById('edit-rate-name-container').classList.add('hidden');
+            // Clear hidden ID specifically
+            document.getElementById('edit-rate-aircraft-model').value = '';
         }
     }
 
     async saveRate() {
         try {
-            const formData = {
-                aircraft_type: document.getElementById('edit-rate-aircraft-model').value,
+            // Updated to grab value from the Hidden Input
+            const modelId = document.getElementById('edit-rate-aircraft-model').value;
+
+            const payload = {
+                model_id: modelId || null, // Ensure null if empty
                 rate_type: document.getElementById('edit-rate-type').value,
                 amount: parseFloat(document.getElementById('edit-rate-amount').value),
                 description: document.getElementById('edit-rate-description').value,
-                is_active: document.getElementById('edit-rate-is-active').checked
+                is_active: document.getElementById('edit-rate-is-active').checked,
+                rate_name: document.getElementById('edit-rate-name').value
             };
 
-            // Add rate name if type is 'other'
-            if (formData.rate_type === 'other') {
-                formData.rate_name = document.getElementById('edit-rate-name').value;
+            if (payload.rate_type !== 'other') {
+                const typeSelect = document.getElementById('edit-rate-type');
+                const selectedText = typeSelect.options[typeSelect.selectedIndex].text;
+                payload.rate_name = selectedText;
             }
 
-            const { error } = await supabase
-                .from('billing_rates')
-                .update(formData)
-                .eq('id', this.currentRateId);
+            // Validation: Ensure model is selected
+            if (!payload.model_id) {
+                showToast('Please select a valid Aircraft Model from the list', 'error');
+                return;
+            }
+
+            const { error } = await supabase.schema('api').rpc('update_billing_rate', {
+                rate_uuid: this.currentRateId,
+                payload: payload
+            });
 
             if (error) {
                 throw error;

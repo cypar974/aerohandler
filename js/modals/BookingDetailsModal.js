@@ -1,6 +1,8 @@
 // ./components/modals/BookingDetailsModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
+import { EditBookingModal } from "./EditBookingModal.js";
+import { BookingCancelModal } from "./BookingCancelModal.js";
 
 export class BookingDetailsModal {
     constructor(config = {}) {
@@ -56,6 +58,12 @@ export class BookingDetailsModal {
 
     // Update the show method to include a better initial state
     show(bookingData) {
+
+        const zombieModal = document.getElementById('booking-cancel-modal');
+        if (zombieModal) {
+            zombieModal.remove();
+        }
+
         // Prevent multiple instances more aggressively
         if (this.isOpen) {
             console.log('🔧 Modal already open, ignoring show call');
@@ -158,18 +166,15 @@ export class BookingDetailsModal {
         const existingModals = document.querySelectorAll('#booking-details-modal');
         existingModals.forEach(modal => {
             if (modal.parentNode) {
-                console.log('🔧 Removing duplicate modal in createModal');
                 modal.parentNode.removeChild(modal);
             }
         });
 
-        if (this.modal && this.modal.parentNode) {
-            this.modal.parentNode.removeChild(this.modal);
-        }
-
         this.modal = document.createElement('div');
         this.modal.id = 'booking-details-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm';
+
+        // Added Edit and Cancel buttons to the footer
         this.modal.innerHTML = `
         <div class="bg-gray-900 p-6 rounded-xl w-full max-w-4xl shadow-lg max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-95 opacity-0 custom-scrollbar">
             <div class="flex justify-between items-center mb-6">
@@ -186,10 +191,21 @@ export class BookingDetailsModal {
             </div>
 
             <div id="booking-details-content">
-                <!-- Content will be populated dynamically -->
             </div>
 
-            <div class="flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-700">
+            <div id="booking-modal-footer" class="hidden flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-700">
+                <button id="edit-booking-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors flex items-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <span>Edit</span>
+                </button>
+                <button id="cancel-booking-btn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    <span>Cancel</span>
+                </button>
                 <button id="close-booking-details" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors">
                     Close
                 </button>
@@ -197,90 +213,68 @@ export class BookingDetailsModal {
         </div>
 
         <style>
-            .custom-scrollbar::-webkit-scrollbar {
-                width: 8px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-track {
-                background: #374151;
-                border-radius: 4px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb {
-                background: #6B7280;
-                border-radius: 4px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: #9CA3AF;
-            }
+            .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+            .custom-scrollbar::-webkit-scrollbar-track { background: #374151; border-radius: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background: #6B7280; border-radius: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
         </style>
     `;
 
         document.body.appendChild(this.modal);
-        console.log('🔧 Modal created and appended to body');
     }
 
     setupEventListeners() {
-        // Clean up any existing listeners first
         this.cleanupEventListeners();
 
         const closeModalBtn = this.modal.querySelector('#close-booking-modal');
         const closeDetailsBtn = this.modal.querySelector('#close-booking-details');
+        const editBtn = this.modal.querySelector('#edit-booking-btn');
+        const cancelBtn = this.modal.querySelector('#cancel-booking-btn');
 
-        if (!closeModalBtn || !closeDetailsBtn) {
-            console.error('🔧 Close buttons not found in modal');
-            return;
-        }
+        if (!closeModalBtn || !closeDetailsBtn) return;
 
+        // Handlers
         const closeModalHandler = () => {
-            console.log('🔧 Close modal button clicked');
-            if (this.onClose) {
-                this.onClose();
-            }
+            if (this.onClose) this.onClose();
             this.hide();
         };
 
-        const closeDetailsHandler = () => {
-            console.log('🔧 Close details button clicked');
-            if (this.onClose) {
-                this.onClose();
-            }
-            this.hide();
-        };
+        const editHandler = () => this.handleEdit();
+        const cancelHandler = () => this.handleCancel();
 
         const modalClickHandler = (e) => {
             if (e.target === this.modal) {
-                console.log('🔧 Modal backdrop clicked');
-                if (this.onClose) {
-                    this.onClose();
-                }
+                if (this.onClose) this.onClose();
                 this.hide();
             }
         };
 
         const keydownHandler = (e) => {
             if (e.key === 'Escape' && this.isOpen) {
-                console.log('🔧 Escape key pressed');
-                if (this.onClose) {
-                    this.onClose();
-                }
+                if (this.onClose) this.onClose();
                 this.hide();
             }
         };
 
-        // Add event listeners
+        // Attach events
         closeModalBtn.addEventListener('click', closeModalHandler);
-        closeDetailsBtn.addEventListener('click', closeDetailsHandler);
+        closeDetailsBtn.addEventListener('click', closeModalHandler);
         this.modal.addEventListener('click', modalClickHandler);
         document.addEventListener('keydown', keydownHandler);
+
+        // New buttons
+        if (editBtn) editBtn.addEventListener('click', editHandler);
+        if (cancelBtn) cancelBtn.addEventListener('click', cancelHandler);
 
         // Store for cleanup
         this.eventListeners = [
             { element: closeModalBtn, event: 'click', handler: closeModalHandler },
-            { element: closeDetailsBtn, event: 'click', handler: closeDetailsHandler },
+            { element: closeDetailsBtn, event: 'click', handler: closeModalHandler },
             { element: this.modal, event: 'click', handler: modalClickHandler },
-            { element: document, event: 'keydown', handler: keydownHandler }
-        ];
-
-        console.log('🔧 Event listeners setup complete');
+            { element: document, event: 'keydown', handler: keydownHandler },
+            { element: editBtn, event: 'click', handler: editHandler },
+            { element: cancelBtn, event: 'click', handler: cancelHandler }
+        ].filter(l => l.element);
     }
 
     showErrorState(message) {
@@ -310,6 +304,11 @@ export class BookingDetailsModal {
     showLoadingState() {
         const content = document.getElementById('booking-details-content');
         const headerIndicator = document.getElementById('modal-loading-indicator');
+
+        const footer = document.getElementById('booking-modal-footer');
+        if (footer) {
+            footer.classList.add('hidden');
+        }
 
         if (headerIndicator) {
             headerIndicator.classList.remove('hidden');
@@ -372,6 +371,11 @@ export class BookingDetailsModal {
 
                 await new Promise(resolve => setTimeout(resolve, 50));
                 content.style.opacity = '1';
+
+                const footer = document.getElementById('booking-modal-footer');
+                if (footer) {
+                    footer.classList.remove('hidden');
+                }
             }
 
             // Hide loading state
@@ -391,6 +395,75 @@ export class BookingDetailsModal {
         }
     }
 
+    async fetchUserProfile(userUuid) {
+        if (!userUuid) return null;
+
+        // 1. Get User Metadata (Role & Person ID) using the API schema
+        const { data: userData, error: userError } = await supabase
+            .schema('api')
+            .rpc('get_user_by_id', { user_uuid: userUuid });
+
+        if (userError || !userData || userData.length === 0) {
+            console.warn(`Could not resolve user ${userUuid}`, userError);
+            return null;
+        }
+
+        const userMeta = userData[0];
+
+        // 2. Select appropriate RPC based on role
+        // FIXED: Removed 'api.' prefix from all function names
+        let rpcName = '';
+        let paramName = '';
+        let type = userMeta.role;
+
+        switch (userMeta.role) {
+            case 'student':
+                rpcName = 'get_student_by_id';
+                paramName = 'student_uuid';
+                break;
+            case 'instructor':
+                rpcName = 'get_instructor_by_id';
+                paramName = 'instructor_uuid';
+                break;
+            case 'regular_pilot':
+                rpcName = 'get_regular_pilot_by_id';
+                paramName = 'pilot_uuid';
+                break;
+            case 'maintenance_technician':
+                rpcName = 'get_maintenance_technician_by_id';
+                paramName = 'technician_uuid';
+                break;
+            default:
+                // Fallback for 'other_person' or undefined roles
+                return {
+                    name: 'Unknown User',
+                    type: userMeta.role
+                };
+        }
+
+        // 3. Call RPC using .schema('api')
+        // FIXED: Added .schema('api') here
+        const { data: profileData, error: profileError } = await supabase
+            .schema('api')
+            .rpc(rpcName, {
+                [paramName]: userMeta.person_id
+            });
+
+        if (profileError || !profileData || profileData.length === 0) {
+            console.warn(`Could not fetch profile for person ${userMeta.person_id}`, profileError);
+            return null;
+        }
+
+        const profile = profileData[0];
+
+        // 4. Normalize data for UI
+        return {
+            ...profile,
+            name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim(),
+            type: type
+        };
+    }
+
     async loadRelatedData(bookingData) {
         try {
             console.log('🔧 Starting to load related data for booking:', bookingData.id);
@@ -403,21 +476,32 @@ export class BookingDetailsModal {
                 this.updateLoadingProgress(progress, this.getProgressMessage(step));
             };
 
-            // Step 1: Load plane data
+            // Step 1: Load plane data via RPC
             updateProgress(1);
             console.log('🔧 Loading plane data...');
             const { data: planeData, error: planeError } = await supabase
-                .from('planes')
-                .select('*')
-                .eq('id', bookingData.plane_id)
-                .single();
+                .schema('api').rpc('get_plane_by_id', { plane_uuid: bookingData.plane_id });
 
             if (planeError) {
                 console.error('❌ Error loading plane:', planeError);
                 throw new Error(`Failed to load aircraft: ${planeError.message}`);
             }
 
-            if (!planeData) {
+            const plane = planeData && planeData.length > 0 ? planeData[0] : null;
+
+            // FIX: Fetch Plane Model Name
+            if (plane && plane.model_id) {
+                const { data: modelData, error: modelError } = await supabase
+                    .schema('api').rpc('get_plane_model_by_id', { model_uuid: plane.model_id });
+
+                if (!modelError && modelData && modelData.length > 0) {
+                    plane.model = modelData[0].model_name;
+                } else {
+                    plane.model = 'Unknown Model';
+                }
+            }
+
+            if (!plane) {
                 console.warn('⚠️ No plane found for ID:', bookingData.plane_id);
             }
 
@@ -426,58 +510,18 @@ export class BookingDetailsModal {
             let instructorData = null;
             if (bookingData.instructor_id) {
                 console.log('🔧 Loading instructor data...');
-                const { data: instructor, error: instructorError } = await supabase
-                    .from('instructors')
-                    .select('*')
-                    .eq('id', bookingData.instructor_id)
-                    .single();
-
-                if (instructorError) {
-                    console.error('❌ Error loading instructor:', instructorError);
-                    // Don't throw - instructor might not be critical
-                } else {
-                    instructorData = instructor;
-                    // CHANGED: Add name field for consistency
-                    instructorData.name = `${instructor.first_name || ''} ${instructor.last_name || ''}`.trim();
-                }
+                // Use helper to resolve User -> Instructor Profile
+                instructorData = await this.fetchUserProfile(bookingData.instructor_id);
             }
 
-            // Step 3: Load pilot data - handle both student and instructor pilots
+            // Step 3: Load pilot data
             updateProgress(3);
             console.log('🔧 Loading pilot data...');
             let pilotData = null;
-
             if (bookingData.pilot_id) {
-                // Strategy: Try instructors first (less common), then students
-                const { data: instructorPilot, error: instructorError } = await supabase
-                    .from('instructors')
-                    .select('*')
-                    .eq('id', bookingData.pilot_id)
-                    .single();
-
-                if (!instructorError && instructorPilot) {
-                    pilotData = instructorPilot;
-                    pilotData.type = 'instructor';
-                    // CHANGED: Construct name from first_name + last_name
-                    pilotData.name = `${instructorPilot.first_name || ''} ${instructorPilot.last_name || ''}`.trim();
-                    console.log('🔧 Pilot is an instructor:', pilotData.name);
-                } else {
-                    // Try students table
-                    const { data: studentPilot, error: studentError } = await supabase
-                        .from('students')
-                        .select('*')
-                        .eq('id', bookingData.pilot_id)
-                        .single();
-
-                    if (!studentError && studentPilot) {
-                        pilotData = studentPilot;
-                        pilotData.type = 'student';
-                        pilotData.name = `${studentPilot.first_name} ${studentPilot.last_name}`;
-                        console.log('🔧 Pilot is a student:', pilotData.name);
-                    } else {
-                        console.warn('⚠️ No pilot found for ID:', bookingData.pilot_id);
-                    }
-                }
+                // Use helper to resolve User -> Profile (handles Student vs Instructor vs Pilot roles)
+                pilotData = await this.fetchUserProfile(bookingData.pilot_id);
+                console.log('🔧 Pilot loaded:', pilotData ? pilotData.name : 'None');
             }
 
             // Step 4: Load additional students for instruction flights
@@ -488,12 +532,13 @@ export class BookingDetailsModal {
             if (bookingData.booking_type === 'instruction') {
                 console.log('🔧 Loading instruction flight students...');
 
-                // For instruction flights, include all students (pilot + additional students)
+                // For instruction flights, include the pilot if they are a student
                 if (pilotData && pilotData.type === 'student') {
                     studentsData.push(pilotData);
                 }
 
                 // Load additional students (student2_id, student3_id)
+                // Note: These are now User UUIDs in the new schema
                 const additionalStudentIds = [
                     bookingData.student2_id,
                     bookingData.student3_id
@@ -501,23 +546,10 @@ export class BookingDetailsModal {
 
                 console.log('🔧 Additional student IDs:', additionalStudentIds);
 
-                if (additionalStudentIds.length > 0) {
-                    const { data: additionalStudents, error: studentsError } = await supabase
-                        .from('students')
-                        .select('*')
-                        .in('id', additionalStudentIds);
-
-                    if (studentsError) {
-                        console.error('❌ Error loading additional students:', studentsError);
-                        // Continue without additional students
-                    } else if (additionalStudents) {
-                        // CHANGED: Add name field to each student
-                        const studentsWithNames = additionalStudents.map(student => ({
-                            ...student,
-                            name: `${student.first_name} ${student.last_name}`
-                        }));
-                        studentsData = [...studentsData, ...studentsWithNames];
-                        console.log('🔧 Loaded additional students:', additionalStudents.length);
+                for (const userId of additionalStudentIds) {
+                    const studentProfile = await this.fetchUserProfile(userId);
+                    if (studentProfile) {
+                        studentsData.push(studentProfile);
                     }
                 }
             } else if (bookingData.booking_type === 'regular' && pilotData) {
@@ -525,17 +557,12 @@ export class BookingDetailsModal {
                 studentsData.push(pilotData);
             }
 
-            studentsData = studentsData.map(student => ({
-                ...student,
-                name: student.name || `${student.first_name} ${student.last_name}`
-            }));
-
             // Final progress update
             this.updateLoadingProgress(100, "Finalizing booking details...");
 
             // Compile all related data
             this.relatedData = {
-                plane: planeData,
+                plane: plane,
                 instructor: instructorData,
                 students: studentsData,
                 pilot: pilotData,
@@ -544,10 +571,10 @@ export class BookingDetailsModal {
             };
 
             console.log('✅ Successfully loaded related data:', {
-                plane: planeData?.tail_number || 'None',
-                instructor: instructorData?.first_name || 'None',
+                plane: plane?.tail_number || 'None',
+                instructor: instructorData?.name || 'None',
                 students: studentsData.length,
-                pilot: pilotData ? (pilotData.type === 'instructor' ? pilotData.first_name : `${pilotData.first_name} ${pilotData.last_name}`) : 'None',
+                pilot: pilotData?.name || 'None',
                 bookingType: bookingData.booking_type
             });
 
@@ -585,7 +612,6 @@ export class BookingDetailsModal {
 
         content.innerHTML = `
         <div class="flex flex-col items-center justify-center py-12">
-            <!-- Animated spinner -->
             <div class="relative mb-6">
                 <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
                 <div class="absolute inset-0 flex items-center justify-center">
@@ -593,13 +619,11 @@ export class BookingDetailsModal {
                 </div>
             </div>
             
-            <!-- Progress message -->
             <div class="text-lg text-gray-300 text-center mb-2">${message}</div>
             <div class="text-sm text-gray-500 text-center mb-6">
                 Preparing flight details for viewing
             </div>
             
-            <!-- Progress bar -->
             <div class="w-80 bg-gray-700 rounded-full h-3 mb-2">
                 <div 
                     class="bg-blue-500 h-3 rounded-full transition-all duration-500 ease-out"
@@ -607,12 +631,10 @@ export class BookingDetailsModal {
                 ></div>
             </div>
             
-            <!-- Progress percentage -->
             <div class="text-xs text-gray-400">
                 ${Math.round(percent)}% complete
             </div>
             
-            <!-- Loading tips -->
             <div class="mt-8 text-xs text-gray-500 text-center max-w-md">
                 <div class="animate-pulse">📋 Gathering flight information</div>
                 <div class="mt-1 animate-pulse" style="animation-delay: 0.2s">✈️ Loading aircraft details</div>
@@ -634,7 +656,6 @@ export class BookingDetailsModal {
 
         return `
     <div class="space-y-6">
-        <!-- Header Section -->
         <div class="bg-gray-800 p-4 rounded-lg">
             <div class="flex justify-between items-start">
                 <div>
@@ -652,9 +673,7 @@ export class BookingDetailsModal {
             </div>
         </div>
 
-        <!-- Booking Information -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Time & Duration -->
             <div class="bg-gray-800 p-4 rounded-lg">
                 <h4 class="text-lg font-semibold mb-3 text-blue-400">Time Information</h4>
                 <div class="space-y-2">
@@ -681,7 +700,6 @@ export class BookingDetailsModal {
                 </div>
             </div>
 
-            <!-- Aircraft Details -->
             <div class="bg-gray-800 p-4 rounded-lg">
                 <h4 class="text-lg font-semibold mb-3 text-green-400">Aircraft</h4>
                 <div class="space-y-2">
@@ -705,7 +723,6 @@ export class BookingDetailsModal {
             </div>
         </div>
 
-        <!-- Pilot Information for Regular Flights -->
         ${bookingType === 'regular' ? `
         <div class="bg-gray-800 p-4 rounded-lg">
             <h4 class="text-lg font-semibold mb-4 text-yellow-400">Pilot Information</h4>
@@ -713,13 +730,38 @@ export class BookingDetailsModal {
             <div class="overflow-x-auto pb-4">
                 <div class="flex space-x-4 min-w-max">
                     ${students.map((person) => {
-            const isInstructor = person.type === 'instructor' || person.license_number?.includes('CFI'); // Adjust based on your data structure
+            // Define badge styles based on person type
+            let badgeText = 'Student Pilot';
+            let badgeColor = 'bg-blue-600';
+
+            switch (person.type) {
+                case 'instructor':
+                    badgeText = 'Instructor Pilot';
+                    badgeColor = 'bg-purple-600';
+                    break;
+                case 'regular_pilot':
+                    badgeText = 'Regular Pilot';
+                    badgeColor = 'bg-green-600';
+                    break;
+                case 'maintenance_technician':
+                    badgeText = 'Maintenance Tech';
+                    badgeColor = 'bg-orange-600';
+                    break;
+                default:
+                    // Check for CFI in license as fallback for legacy data
+                    if (person.license_number?.includes('CFI')) {
+                        badgeText = 'Instructor Pilot';
+                        badgeColor = 'bg-purple-600';
+                    }
+                    break;
+            }
+
             return `
                 <div class="bg-gray-700 p-4 rounded-lg min-w-[280px] flex-shrink-0 shadow-lg">
                     <div class="flex justify-between items-center mb-3">
-                        <span class="font-medium text-white">${isInstructor ? person.full_name : `${person.first_name} ${person.last_name}`}</span>
-                        <span class="px-2 py-1 rounded text-xs ${isInstructor ? 'bg-purple-600' : 'bg-blue-600'}">
-                            ${isInstructor ? 'Instructor Pilot' : 'Student Pilot'}
+                        <span class="font-medium text-white">${person.name || (person.first_name + ' ' + person.last_name)}</span>
+                        <span class="px-2 py-1 rounded text-xs ${badgeColor}">
+                            ${badgeText}
                         </span>
                     </div>
                     <div class="space-y-2 text-sm">
@@ -752,9 +794,7 @@ export class BookingDetailsModal {
         </div>
         ` : ''}
 
-        <!-- Students & Instructor Information for Instruction Flights -->
         ${bookingType === 'instruction' ? `
-        <!-- Students Section -->
         <div class="bg-gray-800 p-4 rounded-lg">
             <h4 class="text-lg font-semibold mb-4 text-yellow-400">
                 Students
@@ -768,7 +808,7 @@ export class BookingDetailsModal {
             return `
                         <div class="bg-gray-700 p-4 rounded-lg min-w-[280px] flex-shrink-0 shadow-lg">
                             <div class="flex justify-between items-center mb-3">
-                                <span class="font-medium text-white">${person.first_name} ${person.last_name}</span>
+                                <span class="font-medium text-white">${person.name || (person.first_name + ' ' + person.last_name)}</span>
                                 <span class="px-2 py-1 rounded text-xs ${index === 0 ? 'bg-blue-600' : 'bg-gray-600'}">
                                     ${index === 0 ? 'Primary Student' : 'Student'}
                                 </span>
@@ -802,8 +842,7 @@ export class BookingDetailsModal {
             `}
         </div>
 
-        <!-- Instructor Section -->
-            ${instructor ? `
+        ${instructor ? `
             <div class="bg-gray-800 p-4 rounded-lg">
                 <h4 class="text-lg font-semibold mb-4 text-purple-400">Instructor</h4>
                 <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
@@ -832,7 +871,6 @@ export class BookingDetailsModal {
 
         ` : ''}
 
-        <!-- Description -->
         ${bookingData.description ? `
         <div class="bg-gray-800 p-4 rounded-lg">
             <h4 class="text-lg font-semibold mb-3 text-gray-300">Description</h4>
@@ -840,7 +878,6 @@ export class BookingDetailsModal {
         </div>
         ` : ''}
 
-        <!-- Booking Type -->
         <div class="bg-gray-800 p-4 rounded-lg">
             <h4 class="text-lg font-semibold mb-3 text-gray-300">Booking Type</h4>
             <div class="flex justify-between items-center">
@@ -853,7 +890,6 @@ export class BookingDetailsModal {
             </div>
         </div>
 
-        <!-- System Information -->
         <div class="bg-gray-800 p-4 rounded-lg">
             <h4 class="text-lg font-semibold mb-3 text-gray-300">System Information</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -882,6 +918,52 @@ export class BookingDetailsModal {
         } else {
             console.log('🔧 render() called but no booking data');
         }
+    }
+
+    handleEdit() {
+        if (!this.currentBooking) return;
+
+        // FIX: Capture the booking data locally before 'hide()' destroys it
+        const bookingToRestore = this.currentBooking;
+
+        this.hide();
+
+        const editModal = new EditBookingModal({
+            booking: bookingToRestore, // Use local variable
+            planes: this.planes,
+            students: this.students,
+            instructors: this.instructors,
+            onClose: () => {
+                // FIX: Use 'bookingToRestore' because 'this.currentBooking' is now null
+                this.show(bookingToRestore);
+            }
+        });
+
+        editModal.render();
+    }
+
+    handleCancel() {
+        if (!this.currentBooking) return;
+
+        // FIX: Capture the booking data locally before 'hide()' destroys it
+        const bookingToRestore = this.currentBooking;
+
+        // Hide this modal
+        this.hide();
+
+        const cancelModal = new BookingCancelModal({
+            booking: bookingToRestore, // Use local variable
+            onConfirm: () => {
+                // Logic handled by CancelModal
+                console.log('Booking cancelled via Details Modal');
+            },
+            onCancel: () => {
+                // FIX: Use 'bookingToRestore' because 'this.currentBooking' is now null
+                this.show(bookingToRestore);
+            }
+        });
+
+        cancelModal.render();
     }
 
 }

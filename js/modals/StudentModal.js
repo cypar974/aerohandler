@@ -1,6 +1,6 @@
 // ./modals/StudentModal.js
-import { supabase } from "../../supabase.js";
-import { showToast } from "../utils/showToast.js";
+import { supabase } from "../supabase.js";
+import { showToast } from "../components/showToast.js";
 
 export class StudentModal {
     constructor() {
@@ -52,7 +52,6 @@ export class StudentModal {
                     </button>
                 </div>
                 <form id="student-form" class="space-y-6">
-                    <!-- Mandatory Info -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Mandatory Information</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -85,7 +84,6 @@ export class StudentModal {
                         </div>
                     </fieldset>
 
-                    <!-- Secondary Info -->
                     <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                         <legend class="font-semibold text-gray-100 px-2">Additional Information</legend>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -100,9 +98,7 @@ export class StudentModal {
                         </div>
                     </fieldset>
 
-                    <!-- Edit Mode Additional Fields -->
                     <div id="edit-mode-fields" class="hidden">
-                        <!-- Contact & Emergency Info -->
                         <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                             <legend class="font-semibold text-gray-100 px-2">Contact & Emergency</legend>
                             <div class="grid grid-cols-1 gap-4 mt-2">
@@ -123,7 +119,6 @@ export class StudentModal {
                             </div>
                         </fieldset>
 
-                        <!-- License & Medical -->
                         <fieldset class="border border-gray-700 p-4 rounded-lg bg-gray-800">
                             <legend class="font-semibold text-gray-100 px-2">License & Medical</legend>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -225,6 +220,7 @@ export class StudentModal {
         document.getElementById('student-address').value = studentData.address || '';
         document.getElementById('emergency-contact').value = studentData.emergency_contact_name || '';
         document.getElementById('emergency-phone').value = studentData.emergency_contact_phone || '';
+        // Note: membership-status maps to SQL is_active implicitly, or is ignored if column missing
         document.getElementById('membership-status').value = studentData.membership_status || 'active';
         document.getElementById('license-type').value = studentData.license_type || '';
 
@@ -306,15 +302,13 @@ export class StudentModal {
     }
 
     async addStudent(firstName, lastName, email, dob, phone, license) {
-        // Fetch the max student number
-        const { data: allStudents, error: fetchError } = await supabase
-            .from("students")
-            .select("student_number");
+        // 1. Fetch the max student number (for auto-increment logic)
+        const { data: allStudents, error: fetchError } = await supabase.schema('api').rpc('get_students');
 
         if (fetchError) throw fetchError;
 
         let nextStudentNumber = 1;
-        if (allStudents.length > 0) {
+        if (allStudents && allStudents.length > 0) {
             const numbers = allStudents
                 .map(s => parseInt(s.student_number))
                 .filter(n => !isNaN(n));
@@ -322,25 +316,47 @@ export class StudentModal {
                 nextStudentNumber = Math.max(...numbers) + 1;
             }
         }
+        const calculatedStudentNumber = nextStudentNumber.toString().padStart(4, '0');
 
-        const { error } = await supabase.from("students").insert([{
+        // 2. Prepare the Single Payload
+        const payload = {
             first_name: firstName,
             last_name: lastName,
             email: email,
             date_of_birth: dob,
+            student_number: calculatedStudentNumber,
             phone: phone,
             license_number: license,
-            student_number: nextStudentNumber.toString().padStart(4, '0'),
-            join_date: new Date().toISOString().split('T')[0],
-            membership_status: 'active'
-        }]);
+            address: document.getElementById("student-address")?.value.trim(),
+            license_type: document.getElementById("license-type")?.value.trim()
+        };
 
-        if (error) throw error;
+        // 3. Call the Consolidated API Function
+        const { data: newStudent, error: createError } = await supabase.schema('api').rpc('insert_student', {
+            payload: payload
+        });
+
+        if (createError) throw createError;
+
+        // 4. 📧 SEND PASSWORD RESET EMAIL
+        try {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + '/update-password.html'
+            });
+
+            if (resetError) {
+                console.error("User created, but email failed:", resetError);
+                showToast("Student saved, but Invite Email failed: " + resetError.message, "warning");
+            } else {
+                showToast("Student saved & Invite Email sent!", "success");
+            }
+        } catch (emailErr) {
+            console.error("Unexpected email error:", emailErr);
+            showToast("Student saved, but Invite Email failed.", "warning");
+        }
 
         this.hide();
-        showToast("Student added successfully!", "success");
 
-        // Callback for parent component
         if (this.onStudentSaved) {
             this.onStudentSaved();
         }
@@ -356,7 +372,7 @@ export class StudentModal {
         const licenseExpiry = document.getElementById("license-expiry")?.value;
         const medicalExpiry = document.getElementById("medical-expiry")?.value;
 
-        // Prepare update data
+        // Prepare update data payload matching SQL columns
         const updateData = {
             first_name: firstName,
             last_name: lastName,
@@ -383,10 +399,11 @@ export class StudentModal {
             }
         });
 
-        const { error } = await supabase
-            .from("students")
-            .update(updateData)
-            .eq("id", this.currentStudentId);
+        // Use RPC to update
+        const { error } = await supabase.schema('api').rpc('update_student', {
+            student_uuid: this.currentStudentId,
+            payload: updateData
+        });
 
         if (error) throw error;
 

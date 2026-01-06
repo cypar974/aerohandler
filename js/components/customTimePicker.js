@@ -1,4 +1,3 @@
-// ./js/components/customTimePicker.js
 export class CustomTimePicker {
     constructor(inputElement) {
 

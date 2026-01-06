@@ -4,8 +4,6 @@ const loginForm = document.getElementById("login-form");
 const errorMsg = document.getElementById("error-msg");
 const emailInput = document.getElementById("email");
 const rememberToggle = document.getElementById("remember-toggle");
-
-// 1. Handle "Remember Me" Toggle UI
 if (rememberToggle) {
 
     if (localStorage.getItem('aero_remember_active') === 'true') {
@@ -19,8 +17,6 @@ if (rememberToggle) {
         rememberToggle.classList.toggle('active');
     });
 }
-
-// 2. Handle Login Submission
 if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -68,8 +64,6 @@ if (loginForm) {
         }
     });
 }
-
-// 3. Session Check (Redirect if already logged in)
 (async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session && window.location.pathname.endsWith("login.html")) {

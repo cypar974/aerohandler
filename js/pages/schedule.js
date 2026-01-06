@@ -1,4 +1,3 @@
-// ./js/pages/schedule.js
 import { supabase } from "../supabase.js";
 import { AddBookingModal } from "../modals/AddBookingModal.js";
 import { EditBookingModal } from "../modals/EditBookingModal.js";
@@ -24,19 +23,13 @@ const hours = Array.from({ length: 17 }, (_, i) => 6 + i);
 
 let lastBookingClick = 0;
 const CLICK_DEBOUNCE_MS = 500;
-
-// Table view states
 let tableView = false;
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "pilot_name", query: "" };
 let currentPage = 1;
 const rowsPerPage = 10;
-
-// Modal management
 let activeModal = null;
 let modalCleanupTimeout = null;
-
-// Toggle state for showing all bookings vs future only
 let showAllBookings = false;
 
 export async function loadSchedulePage() {

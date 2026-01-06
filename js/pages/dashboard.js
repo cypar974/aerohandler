@@ -148,10 +148,6 @@ export async function loadDashboardPage() {
     }, 100);
 }
 
-// =========================================================
-// DATA LAYER (Refactored for Role-Segregated Schema)
-// =========================================================
-
 async function fetchTotalStudents() {
     try {
 
@@ -319,8 +315,6 @@ function getDefaultFinancialData() {
         recentTransactions: []
     };
 }
-
-// Fallback function in case database is unavailable (Preserved)
 function loadFallbackDashboard() {
     document.getElementById("main-content").innerHTML = `
         <div class="p-6 bg-gray-900 text-white min-h-full">

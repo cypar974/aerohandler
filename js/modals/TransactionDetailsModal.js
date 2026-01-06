@@ -1,4 +1,3 @@
-// ./modals/TransactionDetailsModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 
@@ -125,14 +124,6 @@ export class TransactionDetailsModal {
             }
         });
     }
-
-    /**
-     * Data Mapping Note:
-     * In the new SQL schema, we map:
-     * - paymentData.due_date -> transaction.due_date
-     * - paymentData.created_at -> transaction.created_at
-     * - paymentData.paid_at -> transaction.paid_at
-     */
     generatePaymentHTML(paymentData, relatedDetails) {
 
         const canEdit = true;

@@ -1,4 +1,3 @@
-// ./js/pages/finance.js
 import { supabase } from "../supabase.js";
 import { PaymentModal } from "../modals/PaymentModal.js";
 import { TransactionDetailsModal } from "../modals/TransactionDetailsModal.js";
@@ -14,16 +13,10 @@ let planesData = [];
 let planeModelsData = [];
 let billingRates = [];
 let membersData = [];
-
-// Combined ledger data (source of truth for receivable/payable/transactions)
 let fullLedgerData = [];
-
-// Payment data for each view (Derived from fullLedgerData)
 let receivableData = [];
 let payableData = [];
 let transactionsData = [];
-
-// Modal instances
 let activeModal = null;
 let modalCleanupTimeout = null;
 let transactionModal = null;
@@ -32,14 +25,9 @@ let createPayableModal = null;
 
 let addRateModal = null;
 let settleDebtModal = null;
-
-// Track active status filters for the views so autocomplete knows what context to filter within
 let activeReceivableFilter = 'all';
 let activePayableFilter = 'all';
-
-// --- DEMO MODE: PERMISSIONS FLAG ---
 const canManageFinance = true;
-// -----------------------------------
 
 export async function loadFinancePage() {
     console.log('Loading finance page...');
@@ -722,8 +710,6 @@ function closeTransactionModal() {
         transactionModal.hide();
     }
 }
-
-// Payment Modal Integration
 function setupPaymentButtons() {
     document.querySelectorAll('.mark-paid-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -779,8 +765,6 @@ function showCreateInvoiceModal() {
 
     document.addEventListener('invoiceCreated', handleInvoiceCreated);
 }
-
-// Rates view
 function renderRatesView(container) {
     const uniqueModels = [...new Set(planesData.map(plane => plane.model))];
 
@@ -1075,8 +1059,6 @@ export async function cleanupFinancePage() {
 
     window.removeEventListener('beforeunload', cleanupFinancePage);
 }
-
-// Helper functions
 function getStatusColor(status) {
     switch (status) {
         case 'paid': return 'bg-green-600';
@@ -1091,11 +1073,6 @@ function isThisMonth(date) {
     const now = new Date();
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 }
-
-/**
- * Enhanced Filter for Receivable Table
- * Filters by both Status Button and Selected Autocomplete User
- */
 function filterReceivableTable(statusFilter) {
     const selectedUserId = document.getElementById('receivable-search-id') ? document.getElementById('receivable-search-id').value : '';
     const rows = document.querySelectorAll('#receivable-table-body tr');
@@ -1125,10 +1102,6 @@ function filterReceivableTable(statusFilter) {
         }
     });
 }
-
-/**
- * Enhanced Filter for Payable Table
- */
 function filterPayableTable(statusFilter) {
     const selectedUserId = document.getElementById('payable-search-id') ? document.getElementById('payable-search-id').value : '';
     const rows = document.querySelectorAll('#payable-table-body tr');

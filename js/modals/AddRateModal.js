@@ -1,4 +1,3 @@
-// ./modals/AddRateModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { Autocomplete } from "../components/autocomplete.js";
@@ -11,13 +10,6 @@ export class AddRateModal {
         this.aircraftAutocomplete = null;
         this.editingRateId = null;
     }
-
-    /**
-     * @param {Function} onRateSaved - Callback after success
-     * @param {string|null} preSelectedAircraftId - ID to auto-select (Add mode)
-     * @param {string|null} preSelectedType - Type to auto-select (Add mode)
-     * @param {Object|null} rateToEdit - Full rate object if editing
-     */
     async show(onRateSaved = null, preSelectedAircraftId = null, preSelectedType = null, rateToEdit = null) {
         this.onRateSaved = onRateSaved;
 

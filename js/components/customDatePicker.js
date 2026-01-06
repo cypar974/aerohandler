@@ -1,4 +1,3 @@
-// ./js/components/customDatePicker.js
 export class CustomDatePicker {
     constructor(inputElement) {
         this.input = inputElement;

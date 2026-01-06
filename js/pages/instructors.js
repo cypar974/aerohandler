@@ -1,11 +1,8 @@
-// ./js/pages/instructors.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
 import { InstructorModal } from "../modals/InstructorModal.js";
-// --- DEMO MODE: PERMISSIONS FLAG ---
 const canEdit = true;
-// -----------------------------------
 
 let instructorsData = [];
 let sortState = { column: null, direction: "none" };
@@ -652,8 +649,6 @@ function updateSortArrows() {
         }
     });
 }
-
-// Export the main function
 export default {
     loadInstructorsPage
 };

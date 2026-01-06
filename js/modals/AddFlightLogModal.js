@@ -1,10 +1,8 @@
-// ./modals/AddFlightLogModal.js
 import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { CustomTimePicker } from "../components/customTimePicker.js";
 import { isIATAvalid } from "../components/isIATAvalid.js";
 import { showToast } from "../components/showToast.js";
-// Import the class and the new helper function
 import { Autocomplete, setupPersonAutocomplete } from "../components/autocomplete.js";
 
 export class AddFlightLogModal {

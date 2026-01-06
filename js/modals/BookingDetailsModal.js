@@ -1,4 +1,3 @@
-// ./components/modals/BookingDetailsModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { EditBookingModal } from "./EditBookingModal.js";

@@ -1,4 +1,3 @@
-// ./components/modals/EditBookingModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";

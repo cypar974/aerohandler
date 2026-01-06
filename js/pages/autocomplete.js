@@ -1,4 +1,3 @@
-// ./js/components/autocomplete.js
 
 export class Autocomplete {
     constructor(config) {
@@ -256,21 +255,6 @@ export class Autocomplete {
 
     }
 }
-
-
-// Append this to the end of ./js/components/autocomplete.js
-
-/**
- * Standardizes the setup of an autocomplete field for selecting people.
- * Handles binding the input, updating the hidden ID field, and filtering by role.
- * * @param {Object} config Configuration object
- * @param {string} config.inputId - ID of the text input element
- * @param {string} config.hiddenId - ID of the hidden input element for the UUID
- * @param {Array} config.peopleData - Array of person objects 
- * @param {string} config.roleFilter - 'pilots', 'instructors', 'students', or 'all'
- * @param {Function} [config.onSelect] - Optional callback when an item is selected
- * @returns {Autocomplete|null} The created instance or null if input missing
- */
 export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFilter, onSelect }) {
     const inputElement = document.getElementById(inputId);
     const hiddenElement = document.getElementById(hiddenId);

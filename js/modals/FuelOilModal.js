@@ -1,4 +1,3 @@
-// ./js/modals/FuelOilModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
@@ -26,12 +25,6 @@ export class FuelOilModal {
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
     }
-
-    /**
-     * Entry point to open the modal
-     * @param {string} planeId - UUID of the plane
-     * @param {string} tailNumber - Display name for the header
-     */
     async show(planeId, tailNumber) {
         if (this.isOpen) return;
 
@@ -55,10 +48,6 @@ export class FuelOilModal {
         this.attachEvents();
         await this.fetchLogs();
     }
-
-    /**
-     * Fetch records from Supabase
-     */
     async fetchLogs() {
         this.setLoading(true);
         try {

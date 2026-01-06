@@ -1,4 +1,3 @@
-// ./components/modals/BookingCancelModal.js
 import { showToast } from "../components/showToast.js";
 import { supabase } from "../supabase.js";
 

@@ -1,9 +1,6 @@
-// ./js/pages/MaintenanceDetails.js
 import { supabase } from "../supabase.js";
 import { loadMaintenancePage } from "./maintenance.js";
 import { showToast } from "../components/showToast.js";
-
-// Global variable to track current ticket data for the modal
 let currentTicketData = null;
 
 export async function loadMaintenanceDetailsPage(maintenanceId) {
@@ -57,8 +54,6 @@ export async function loadMaintenanceDetailsPage(maintenanceId) {
         showToast("Error loading details: " + error.message, "error");
     }
 }
-
-// --- HELPER: Resolve UUID to Name ---
 async function resolvePersonName(userId) {
     if (!userId) return "System / Unknown";
 
@@ -234,10 +229,6 @@ function getStatusColor(status) {
         default: return 'bg-gray-800 text-gray-300';
     }
 }
-
-// ==========================================
-// EDIT MODAL LOGIC
-// ==========================================
 
 function openEditModal(ticket) {
     const modalContainer = document.getElementById("modal-container");

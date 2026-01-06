@@ -1,4 +1,3 @@
-// js/components/components/data-sources.js
 import { supabase } from "../supabase.js";
 
 export class DataSources {

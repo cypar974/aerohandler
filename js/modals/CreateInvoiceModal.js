@@ -1,4 +1,3 @@
-// ./modals/CreateInvoiceModal.js
 import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
@@ -234,11 +233,6 @@ export class CreateInvoiceModal {
             });
         }
     }
-
-    /**
-     * Since 'get_members' view in SQL does NOT include email, we must fetch it 
-     * using the specific secure RPCs for each table.
-     */
     async fetchPersonEmail(id, type) {
         try {
             let rpcName = '';

@@ -1,4 +1,3 @@
-// ./js/pages/flight_logs.js
 import { supabase } from "../supabase.js";
 import { AddFlightLogModal } from "../modals/AddFlightLogModal.js";
 import { FlightDetailsModal } from "../modals/FlightDetailsModal.js";
@@ -23,8 +22,6 @@ let searchAutocomplete = null;
 
 let easaAutocomplete = null;
 let selectedEasaPlaneId = null;
-
-// Enum Mapping for CSS consistency
 const flightTypeCssMap = {
     'P': 'flight-p',
     'PI': 'flight-p-i',
@@ -266,15 +263,11 @@ let datePickerInstance = null;
 const hours = Array.from({ length: 17 }, (_, i) => 6 + i);
 let lastFlightClick = 0;
 const CLICK_DEBOUNCE_MS = 500;
-
-// Table view states
 let tableView = false;
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "pilot_name", query: "" };
 let currentPage = 1;
 const rowsPerPage = 9;
-
-// Modal management
 let activeModal = null;
 let modalCleanupTimeout = null;
 
@@ -448,8 +441,6 @@ export async function loadFlightLogsPage() {
 
     window.addEventListener('beforeunload', cleanupFlightLogsPage);
 }
-
-// Helper: Resolve User UUID to Member Data
 function resolveUser(userUuid) {
     if (!userUuid) return null;
     const userData = userMap.get(userUuid);

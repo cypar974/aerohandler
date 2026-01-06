@@ -1,4 +1,3 @@
-// ./js/modals/AddBookingModal.js
 import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { CustomTimePicker } from "../components/customTimePicker.js";
@@ -40,10 +39,6 @@ export class AddBookingModal {
         this.handleCancelClick = this.handleCancelClick.bind(this);
         this.handleTabSwitch = this.handleTabSwitch.bind(this);
     }
-
-    /**
-     * Initialize data fetching and basic setup.
-     */
     async init() {
         if (this.isInitialized) return;
 
@@ -58,11 +53,6 @@ export class AddBookingModal {
             showToast('Failed to initialize booking form', 'error');
         }
     }
-
-    /**
-     * Fetches Planes and User Mappings.
-     * Crucial: Maps Person IDs (from View) to User IDs (from Auth Table).
-     */
     async fetchData() {
         try {
             console.log("🔄 Fetching modal data...");

@@ -1,4 +1,3 @@
-// ./modals/CreatePayableModal.js
 import { supabase } from "../supabase.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
@@ -237,10 +236,6 @@ export class CreatePayableModal {
             });
         }
     }
-
-    /**
-     * Identical email fetch logic as CreateInvoiceModal to ensure robustness
-     */
     async fetchPersonEmail(id, type) {
         try {
             let rpcName = '';

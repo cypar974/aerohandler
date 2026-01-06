@@ -1,4 +1,3 @@
-// ./js/pages/planes.js
 import { supabase } from "../supabase.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
 import { showToast } from "../components/showToast.js";
@@ -9,22 +8,16 @@ import { loadFuelHistoryPage } from "./fuelHistory.js";
 import { loadOilHistoryPage } from "./oilHistory.js";
 
 let planesData = [];
-// Cache for plane models to map ID -> Name
 let planeModelsCache = [];
-// Cache for members (pilots/instructors) for autocomplete
 let membersCache = [];
 
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "tail_number", query: "" };
-
-// Pagination
 let currentPage = 1;
 const rowsPerPage = 10;
 const fuelModal = new FuelOilModal();
 
 const maintenanceModal = new MaintenanceHistoryModal();
-
-// --- PERMISSIONS (Permissive Demo Mode) ---
 const permissions = {
     canAdd: true,
     canEdit: true,
@@ -330,16 +323,12 @@ export async function loadPlanesPage() {
     document.getElementById("global-fuel-btn")?.addEventListener("click", loadFuelHistoryPage);
     document.getElementById("global-oil-btn")?.addEventListener("click", loadOilHistoryPage);
 }
-
-// Helper to get models first
 async function fetchPlaneModels() {
     const { data, error } = await supabase.schema('api').rpc('get_plane_models');
     if (!error && data) {
         planeModelsCache = data;
     }
 }
-
-// Helper to fetch members (used for Autocomplete)
 async function fetchMembers() {
 
     if (membersCache.length > 0) return;
@@ -352,8 +341,6 @@ async function fetchMembers() {
         console.error("Failed to fetch members for autocomplete", error);
     }
 }
-
-// Helper to look up model name from ID
 function getModelName(modelId) {
     const model = planeModelsCache.find(m => m.id === modelId);
     return model ? model.model_name : 'Unknown Model';
@@ -616,8 +603,6 @@ async function loadPlaneMenu(planeId) {
         fuelModal.show(planeId, p.tail_number);
     });
 }
-
-// Render the Booking Modal Template (with Autocomplete hooks)
 function renderBookingModal() {
 
     if (document.getElementById("booking-modal")) return;
@@ -1252,8 +1237,6 @@ function exportFlightHistoryToCSV(flightHistory, plane) {
 
     showToast('Flight history exported successfully!', 'success');
 }
-
-// Helper functions for date calculations
 function isToday(date) {
     const today = new Date();
     return date.getDate() === today.getDate() &&

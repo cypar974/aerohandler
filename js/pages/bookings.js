@@ -1,4 +1,3 @@
-// ./js/pages/bookings.js
 import { supabase } from "../supabase.js";
 import { AddBookingModal } from "../modals/AddBookingModal.js";
 import { EditBookingModal } from "../modals/EditBookingModal.js";
@@ -12,8 +11,6 @@ import { getMembers } from "../utils/memberData.js";
 
 let currentDate = new Date();
 let searchQuery = "";
-
-// Data Store
 let bookings = [];
 let planes = [];
 let students = [];
@@ -254,19 +251,13 @@ let datePickerInstance = null;
 const hours = Array.from({ length: 17 }, (_, i) => 6 + i);
 let lastBookingClick = 0;
 const CLICK_DEBOUNCE_MS = 500;
-
-// Table view states
 let tableView = false;
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "pilot_name", query: "" };
 let currentPage = 1;
 const rowsPerPage = 9;
-
-// Modal management
 let activeModal = null;
 let modalCleanupTimeout = null;
-
-// Helper to bridge User ID (Auth) -> Person ID (Data)
 function getPersonByUserId(userId) {
     if (!userId) return null;
     return userIdToPersonMap[userId] || null;

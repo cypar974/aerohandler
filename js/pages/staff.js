@@ -1,18 +1,13 @@
-// ./js/pages/staff.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { setupPersonAutocomplete } from "../components/autocomplete.js";
 import { getMembers } from "../utils/memberData.js";
-
-// --- STATE MANAGEMENT ---
 let staffList = [];
 let availableRoles = [];
 let allMembers = [];
 let activeModal = null;
 let currentFilter = 'all';
 let sortState = { column: 'admin_role_level', direction: 'desc' };
-
-// --- CLEANUP ---
 let cleanupFunctions = [];
 
 export async function loadStaffPage() {
@@ -73,8 +68,6 @@ export async function loadStaffPage() {
         document.getElementById('staff-table-body').innerHTML = `<tr><td colspan="4" class="px-6 py-4 text-center text-red-400">Error loading data.</td></tr>`;
     }
 }
-
-// --- DATA LAYER ---
 async function fetchData() {
 
     const [rolesRes, staffRes, membersRes] = await Promise.all([
@@ -91,8 +84,6 @@ async function fetchData() {
     staffList = staffRes.data || [];
     allMembers = membersRes.data || [];
 }
-
-// --- RENDERING ---
 function renderInterface() {
     renderStats();
     renderFilters();
@@ -243,13 +234,6 @@ function formatSystemRole(role) {
         default: return '<span class="text-gray-500 capitalize">' + role.replace('_', ' ') + '</span>';
     }
 }
-
-// --- MODAL SYSTEM ---
-
-/**
- * Opens modal to Promote (New) or Edit (Existing)
- * @param {Object|null} existingStaff 
- */
 async function openPromoteModal(existingStaff = null) {
     if (activeModal) activeModal.remove();
 

@@ -1,4 +1,3 @@
-// ./js/main.js
 import { loadDashboardPage } from "./pages/dashboard.js";
 import { loadStudentsPage } from "./pages/students.js";
 import { loadPlanesPage } from "./pages/planes.js";
@@ -31,8 +30,6 @@ const routes = {
     "#staff": loadStaffPage,
     "#memberdetails": loadMemberDetailsPage,
 };
-
-// Track current page and cleanup functions
 let currentPage = '';
 let currentCleanup = null;
 
@@ -119,8 +116,6 @@ function initializeCustomPickers() {
         }
     });
 }
-
-// Enhanced menu item click handler
 function setupMenuEventListeners() {
     document.querySelectorAll('a[href^="#"]').forEach(menuItem => {
         menuItem.addEventListener('click', function (e) {
@@ -138,8 +133,6 @@ function setupMenuEventListeners() {
         });
     });
 }
-
-// Enhanced navigate event listener for programmatic navigation
 window.addEventListener('navigate', async (event) => {
     const page = event.detail.page;
     console.log('🧭 Programmatic navigation to:', page);
@@ -364,29 +357,19 @@ async function router() {
         currentCleanup = null;
     }
 }
-
-// Enhanced popstate handler (browser back/forward)
 window.addEventListener('popstate', async (event) => {
     console.log('⬅️ Popstate event, navigating to:', window.location.hash);
     await router();
 });
-
-// Enhanced hashchange handler
 window.addEventListener("hashchange", async () => {
     console.log('#️⃣ Hashchange event, navigating to:', window.location.hash);
     await router();
 });
-
-// Global function for custom pickers
 window.initializeCustomPickers = initializeCustomPickers;
-
-// Cleanup before page unload
 window.addEventListener('beforeunload', async () => {
     console.log('🚪 Page unloading, performing final cleanup');
     await cleanupCurrentPage();
 });
-
-// Initialize the application
 document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 Application initializing...');
 
@@ -400,6 +383,4 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error('❌ Application initialization failed:', error);
     });
 });
-
-// Export for potential use in other modules
 export { router, cleanupCurrentPage };

@@ -1,4 +1,3 @@
-// ./js/modals/MaintenanceHistoryModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
@@ -24,12 +23,6 @@ export class MaintenanceHistoryModal {
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
     }
-
-    /**
-     * Entry point to open the modal
-     * @param {string} planeId - UUID of the plane
-     * @param {string} tailNumber - Display name for the header
-     */
     async show(planeId, tailNumber) {
         if (this.isOpen) return;
 
@@ -54,10 +47,6 @@ export class MaintenanceHistoryModal {
         this.attachEvents();
         await this.fetchHistory();
     }
-
-    /**
-     * Fetch records from Supabase
-     */
     async fetchHistory() {
         this.setLoading(true);
         try {

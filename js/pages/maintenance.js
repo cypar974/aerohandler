@@ -1,17 +1,12 @@
-// ./js/pages/maintenance.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { loadMaintenanceDetailsPage } from "./MaintenanceDetails.js";
-
-// --- STATE MANAGEMENT ---
 let maintenanceRecords = [];
 let planes = [];
 let technicians = [];
 let activeModal = null;
 let currentFilter = 'active';
 let sortState = { column: 'created_at', direction: 'desc' };
-
-// --- CLEANUP MANAGEMENT ---
 let cleanupFunctions = [];
 
 export async function loadMaintenancePage() {
@@ -41,8 +36,6 @@ export async function loadMaintenancePage() {
         renderErrorScreen(error.message);
     }
 }
-
-// --- DATA LAYER ---
 async function fetchData() {
 
     const [planesRes, maintRes, techsRes] = await Promise.all([
@@ -59,8 +52,6 @@ async function fetchData() {
     maintenanceRecords = maintRes.data || [];
     technicians = techsRes.data || [];
 }
-
-// --- RENDERING ---
 
 function renderErrorScreen(errorMessage) {
     const content = document.getElementById("main-content");
@@ -253,8 +244,6 @@ function renderTableRows() {
     });
 }
 
-// --- EVENT HANDLING ---
-
 function attachMainEventListeners() {
     const newBtn = document.getElementById("new-ticket-btn");
     const tabActive = document.getElementById("tab-active");
@@ -306,8 +295,6 @@ function switchTab(tab) {
 
     renderTableRows();
 }
-
-// --- MODAL SYSTEM (Self-contained for robustness) ---
 
 function openMaintenanceModal(record = null) {
     if (activeModal) activeModal.remove();
@@ -457,8 +444,6 @@ function openMaintenanceModal(record = null) {
         }
     };
 }
-
-// --- HELPER FUNCTIONS ---
 
 async function deleteRecord(id) {
     try {

@@ -9,8 +9,6 @@ let currentMemberId = null;
 let currentMemberType = null;
 let previousPageState = null;
 let returnToPage = 'members';
-
-// Modals
 let flightDetailsModal = new FlightDetailsModal();
 let settleDebtModal = null;
 let addFlightModal = null;
@@ -39,11 +37,6 @@ const MEMBER_CONFIG = {
         canFly: false
     }
 };
-
-/**
- * Loads the details page.
- * Accepts either an options object (from Router) or positional args.
- */
 export async function loadMemberDetailsPage(arg1 = null, arg2 = null, arg3 = 'members') {
     let targetId = arg1;
     let targetType = arg2;

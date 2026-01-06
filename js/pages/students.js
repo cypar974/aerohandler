@@ -1,4 +1,3 @@
-// ./js/pages/students.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { loadStudentDetailsPage } from "./studentdetails.js";
@@ -1048,8 +1047,6 @@ async function updateStudent(studentId) {
         submitBtn.innerHTML = originalText;
     }
 }
-
-// Export the main function
 export default {
     loadStudentsPage
 };

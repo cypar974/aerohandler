@@ -1,4 +1,3 @@
-// ./js/pages/members.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { Autocomplete } from "../components/autocomplete.js";
@@ -330,10 +329,6 @@ function renderTable() {
     renderPagination(totalPages);
     updateSortArrows();
 }
-
-/**
- * Main Routing Logic
- */
 async function routeToMember(member) {
     if (member.type === 'student') {
         window.dispatchEvent(new CustomEvent('navigate', {
@@ -363,8 +358,6 @@ async function routeToMember(member) {
         }));
     }
 }
-
-// --- Helper Functions ---
 
 function toggleSort(column) {
     if (sortState.column !== column) {

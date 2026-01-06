@@ -119,10 +119,6 @@
 
         const messageElement = document.getElementById('maintenance-message');
         const countdownElement = document.getElementById('countdown');
-
-        /**
-         * Fetches maintenance status and handles redirection.
-         */
         async function checkMaintenanceStatus() {
             try {
 
@@ -164,10 +160,6 @@
 
         let countdownTimer;
         let countdownValue = REFRESH_INTERVAL_MS / 1000;
-
-        /**
-         * Manages the 60-second countdown display.
-         */
         function updateCountdown() {
             countdownValue--;
             countdownElement.textContent = countdownValue;
@@ -176,10 +168,6 @@
                 clearInterval(countdownTimer);
             }
         }
-
-        /**
-         * Sets the interval for checking status and starts the countdown display.
-         */
         function startCountdownAndSetInterval() {
 
             countdownValue = REFRESH_INTERVAL_MS / 1000;

@@ -1,6 +1,3 @@
-/* ===============================
-   ✨ Smooth Fade Animations
-================================= */
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -33,9 +30,6 @@
     animation: fadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* ===============================
-   🟦 Selection & Interaction
-================================= */
 .drag-select {
     background-color: rgba(59, 130, 246, 0.35);
     border: 1px solid rgba(59, 130, 246, 0.5);
@@ -47,16 +41,10 @@
     background-color: rgba(59, 130, 246, 0.45);
 }
 
-/* ===============================
-   🌑 Neutral Utility Colors
-================================= */
 .bg-gray-750 {
     background-color: #374151;
 }
 
-/* ===============================
-   📅 Custom Pickers Base
-================================= */
 .custom-date-picker-container,
 .custom-time-picker-container {
     position: relative;
@@ -76,9 +64,6 @@
     font-family: 'Inter', sans-serif;
 }
 
-/* ===============================
-   📆 Calendar Styling
-================================= */
 .custom-calendar {
     width: 280px;
     overflow: hidden;
@@ -164,9 +149,6 @@
     color: white;
 }
 
-/* ===============================
-   ⏰ Time Picker Scroll Lists
-================================= */
 .hours-list,
 .minutes-list {
     max-height: 160px;
@@ -199,9 +181,6 @@
     background: #6B7280;
 }
 
-/* ===============================
-   🧭 Inputs and Focus States
-================================= */
 .custom-date-picker-container input[type="text"],
 .custom-time-picker-container input[type="text"] {
     width: 100%;
@@ -246,9 +225,6 @@
     }
 }
 
-/* ===============================
-   🍞 Toast Animations
-================================= */
 @keyframes slideInRight {
     from {
         transform: translateX(100%);
@@ -318,7 +294,7 @@
 
 #current-date {
     font-size: 1.125rem;
-    
+
     font-weight: 500;
 }
 
@@ -403,19 +379,19 @@
 
 .custom-scrollbar::-webkit-scrollbar-track {
     background: #374151;
-    
+
     border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #6B7280;
-    
+
     border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #9CA3AF;
-    
+
 }
 
 .toast-container {
@@ -430,17 +406,14 @@
     transform: translateY(-1px);
 }
 
-/* ===============================
-   🔍 Autocomplete Scrollbar
-================================= */
 .autocomplete-suggestions::-webkit-scrollbar {
     display: none;
-    
+
 }
 
 .autocomplete-suggestions {
     -ms-overflow-style: none;
-    
+
     scrollbar-width: none;
-    
+
 }

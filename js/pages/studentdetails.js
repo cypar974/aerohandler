@@ -11,8 +11,6 @@ let currentStudentId = null;
 let previousPageState = null;
 let flightDetailsModal = new FlightDetailsModal();
 let createInvoiceModal = null;
-
-// Declare missing variables
 let currentStudentNumber = null;
 let currentBookingModal = null;
 let modalCleanupTimeout = null;

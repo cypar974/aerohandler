@@ -1,4 +1,3 @@
-// ./modals/EditRateModal.js
 import { supabase } from "../supabase.js";
 import { showToast } from "../utils/showToast.js";
 import { Autocomplete } from "../js/components/autocomplete.js";

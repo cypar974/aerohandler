@@ -1,4 +1,3 @@
-// ./js/components/customWeekPicker.js
 export class CustomWeekPicker {
     constructor(inputElement) {
         this.input = inputElement;

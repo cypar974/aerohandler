@@ -10,17 +10,11 @@ let currentInstructorId = null;
 let previousPageState = null;
 let flightDetailsModal = new FlightDetailsModal();
 let settleDebtModal = null;
-
-// Declare missing variables
 let currentBookingModal = null;
 let modalCleanupTimeout = null;
-
-// Cache for autocomplete data
 let cachedStudents = [];
 
 let returnToPage = 'instructors';
-
-// CHANGE: Add 'sourcePage' to the arguments list
 export async function loadInstructorDetailsPage(instructorId = null, sourcePage = 'instructors') {
     const hash = window.location.hash;
     const instructorMatch = hash.match(/^#instructor\/([A-Za-z0-9-]+)$/);

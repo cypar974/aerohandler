@@ -1,4 +1,3 @@
-// ./js/pages/submit_flight.js
 import { AddFlightLogModal } from "../modals/AddFlightLogModal.js";
 import { showToast } from "../components/showToast.js";
 

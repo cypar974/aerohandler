@@ -1,4 +1,3 @@
-// js/components/showToast.js
 export function showToast(message, type = "success") {
     let container = document.getElementById("toast-container");
     if (!container) {

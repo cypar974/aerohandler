@@ -32,7 +32,7 @@ export class CreateInvoiceModal {
 
     async loadPeople() {
         try {
-            // Loads ID, Name, Type from the view (Email is missing here in SQL)
+
             const { data, error } = await supabase.schema('api').rpc('get_members');
 
             if (error) throw error;
@@ -50,7 +50,7 @@ export class CreateInvoiceModal {
 
         const canCreateInvoice = true;
 
-        // Icons
+
         const iconUser = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`;
         const iconDollar = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
         const iconDesc = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>`;
@@ -213,22 +213,22 @@ export class CreateInvoiceModal {
                 peopleData: this.peopleData,
                 roleFilter: 'all',
                 onSelect: async (selected) => {
-                    // 1. Get the local person object to ensure we have the 'type'
-                    // The SQL view definitely returns 'type', so we look it up here.
+
+
                     const fullPerson = this.peopleData.find(p => p.id === selected.id) || selected;
 
-                    // 2. Set the type immediately (Solves "Role: Unknown")
+
                     const type = fullPerson.type || 'other_person';
                     document.getElementById('invoice-person-type').value = type;
 
-                    // 3. Update UI immediately with what we have (Role yes, Email pending)
+
                     this.showPersonDetails(fullPerson, 'Loading email...');
 
-                    // 4. Fetch the email asynchronously since SQL view get_members doesn't have it.
-                    // We must query specific RPCs based on type to get the full profile.
+
+
                     const email = await this.fetchPersonEmail(fullPerson.id, type);
 
-                    // 5. Update UI again with the email
+
                     this.showPersonDetails(fullPerson, email);
                 }
             });
@@ -250,7 +250,7 @@ export class CreateInvoiceModal {
                 case 'instructor':
                     rpcName = 'get_instructor_by_id'; paramName = 'instructor_uuid'; break;
                 case 'regular_pilot':
-                    rpcName = 'get_regular_pilot_by_id'; paramName = 'pilot_uuid'; break; // Note: SQL param might vary, checking standard
+                    rpcName = 'get_regular_pilot_by_id'; paramName = 'pilot_uuid'; break;
                 case 'maintenance_technician':
                     rpcName = 'get_maintenance_technician_by_id'; paramName = 'technician_uuid'; break;
                 case 'other_person':
@@ -258,10 +258,10 @@ export class CreateInvoiceModal {
                 default: return 'No email available';
             }
 
-            // Correction for regular_pilot param name based on standard patterns or just try generic
-            // Looking at SQL provided: get_regular_pilot_by_id(pilot_uuid UUID)
-            // get_instructor_by_id(instructor_uuid UUID)
-            // get_student_by_id(student_uuid UUID)
+
+
+
+
 
             const params = {};
             params[paramName] = id;
@@ -270,7 +270,7 @@ export class CreateInvoiceModal {
 
             if (error || !data || data.length === 0) return 'No email found';
 
-            // RPCs return a SETOF (array), get first item
+
             return data[0].email;
 
         } catch (e) {
@@ -285,13 +285,13 @@ export class CreateInvoiceModal {
         const emailElement = document.getElementById('person-email');
 
         if (detailsContainer && typeElement && emailElement) {
-            // FIX: Ensure we read the 'type' property from the SQL view data
+
             const typeRaw = person.type || '';
             const typeDisplay = typeRaw ? typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1).replace('_', ' ') : 'Unknown';
 
             typeElement.textContent = typeDisplay;
 
-            // Use override if provided (lazy load result), otherwise fallback
+
             if (emailOverride) {
                 emailElement.textContent = emailOverride;
             } else {
@@ -352,7 +352,7 @@ export class CreateInvoiceModal {
                             this.peopleData.map(p => ({
                                 id: p.id,
                                 name: `${p.first_name} ${p.last_name}`,
-                                type: p.type // ensure type is passed to autocomplete
+                                type: p.type
                             }))
                         );
                     }
@@ -365,7 +365,7 @@ export class CreateInvoiceModal {
                 document.getElementById('invoice-person-id').value = person.id;
                 document.getElementById('invoice-person-type').value = person.type;
 
-                // Trigger the email fetch manually for prefill
+
                 this.showPersonDetails(person, 'Loading email...');
                 const email = await this.fetchPersonEmail(person.id, person.type);
                 this.showPersonDetails(person, email);

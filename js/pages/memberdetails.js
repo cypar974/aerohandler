@@ -2,39 +2,39 @@ import { supabase } from "../supabase.js";
 import { showToast } from "../components/showToast.js";
 import { FlightDetailsModal } from "../modals/FlightDetailsModal.js";
 import { SettleDebtModal } from "../modals/SettleDebtModal.js";
-import { AddFlightLogModal } from "../modals/AddFlightLogModal.js"; // Only for pilots
+import { AddFlightLogModal } from "../modals/AddFlightLogModal.js";
 import { AddBookingModal } from "../modals/AddBookingModal.js";
 
 let currentMemberId = null;
-let currentMemberType = null; // 'regular_pilot', 'maintenance_technician', 'other_person'
+let currentMemberType = null;
 let previousPageState = null;
 let returnToPage = 'members';
 
 // Modals
 let flightDetailsModal = new FlightDetailsModal();
 let settleDebtModal = null;
-let addFlightModal = null; // Only initialized if needed
+let addFlightModal = null;
 let addBookingModal = null;
 
 const MEMBER_CONFIG = {
     'regular_pilot': {
         label: 'Regular Pilot',
         color: 'blue',
-        icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z', // Globe/Travel
+        icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
         fetchRpc: 'get_regular_pilot_by_id',
         canFly: true
     },
     'maintenance_technician': {
         label: 'Maintenance Tech',
         color: 'slate',
-        icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', // Cog
+        icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
         fetchRpc: 'get_maintenance_technician_by_id',
         canFly: false
     },
     'other_person': {
         label: 'Member',
         color: 'teal',
-        icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z', // User
+        icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
         fetchRpc: 'get_other_person_by_id',
         canFly: false
     }
@@ -49,16 +49,16 @@ export async function loadMemberDetailsPage(arg1 = null, arg2 = null, arg3 = 'me
     let targetType = arg2;
     let returnPage = arg3;
 
-    // 1. Handle Object Input (Fix for Router/CustomEvent call)
-    // If the first argument is an object containing 'memberId', we destructure it.
+
+
     if (typeof arg1 === 'object' && arg1 !== null && arg1.memberId) {
         targetId = arg1.memberId;
         targetType = arg1.type;
         returnPage = arg1.backPage || 'members';
     }
 
-    // 2. Resolve ID and Type from URL Hash (Fallback)
-    // Expected Hash format: #member/<type>/<uuid>
+
+
     const hash = window.location.hash;
     const parts = hash.replace('#member/', '').split('/');
 
@@ -67,7 +67,7 @@ export async function loadMemberDetailsPage(arg1 = null, arg2 = null, arg3 = 'me
         targetId = parts[1];
     }
 
-    // 3. Validation
+
     if (!targetId || !targetType || !MEMBER_CONFIG[targetType]) {
         console.error("Member Details Load Error:", { targetId, targetType });
         showToast('Invalid member identifier or type', 'error');
@@ -76,15 +76,15 @@ export async function loadMemberDetailsPage(arg1 = null, arg2 = null, arg3 = 'me
 
     currentMemberId = targetId;
     currentMemberType = targetType;
-    returnToPage = returnPage; // Update global returnToPage
+    returnToPage = returnPage;
 
-    // 4. Save State
+
     previousPageState = {
         page: document.getElementById('main-content').innerHTML,
         scrollPosition: window.scrollY
     };
 
-    // 5. Render
+
     await renderMemberProfile();
 }
 
@@ -106,8 +106,8 @@ async function renderMemberProfile() {
     try {
         if (!flightDetailsModal) flightDetailsModal = new FlightDetailsModal();
 
-        // --- STEP 1: RESOLVE USER ID ---
-        // We need the linked Auth User ID to find financial transactions and logs
+
+
         let userId = null;
         const { data: userAccounts, error: userError } = await supabase
             .schema('api')
@@ -117,20 +117,20 @@ async function renderMemberProfile() {
             userId = userAccounts[0].id;
         }
 
-        // --- STEP 2: FETCH DATA ---
-        // We run multiple promises in parallel
+
+
         const promises = [
-            // A. Specific Person Data (Polymorphic RPC call)
+
             supabase.schema('api').rpc(config.fetchRpc, {
                 [currentMemberType === 'regular_pilot' ? 'pilot_uuid' :
                     currentMemberType === 'maintenance_technician' ? 'technician_uuid' : 'person_uuid']: currentMemberId
             }).single(),
 
-            // B. Financial Transactions (If we found a User ID)
+
             userId ? supabase.schema('api').rpc('get_transactions_by_person', { person_uuid: userId }) : { data: [] }
         ];
 
-        // C. Conditional: Flight Logs (Only if they can fly and have a User ID)
+
         if (config.canFly && userId) {
             promises.push(supabase.schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId }));
         }
@@ -139,17 +139,17 @@ async function renderMemberProfile() {
 
         const personResult = results[0];
         const transactions = results[1].data || [];
-        // Logs are index 2 if they exist, otherwise empty
+
         const flightLogs = (results.length > 2) ? (results[2].data || []) : [];
 
         if (personResult.error) throw personResult.error;
 
-        // --- STEP 3: PROCESS STATS ---
+
         const member = personResult.data;
         const stats = calculateStats(member, transactions, flightLogs);
 
         renderProfileHTML(member, stats, flightLogs, transactions, config, userId);
-        setupEventListeners(userId); // userId needed for actions like Add Flight
+        setupEventListeners(userId);
 
     } catch (error) {
         console.error('Error loading profile:', error);
@@ -169,7 +169,7 @@ function calculateStats(member, transactions, flightLogs) {
         .filter(t => t.status === 'paid' && t.transaction_direction === 'receivable')
         .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-    // If the person table has a 'total_hours' column, use it. Otherwise 0.
+
     const totalHours = member.total_hours ? parseFloat(member.total_hours) : 0;
 
     return {
@@ -182,19 +182,19 @@ function calculateStats(member, transactions, flightLogs) {
 }
 
 function renderProfileHTML(member, stats, flightLogs, transactions, config, userId) {
-    // Generate Initials
+
     const initials = (member.first_name?.[0] || '') + (member.last_name?.[0] || '');
 
-    // Conditional Sections
+
     const showFlightStats = config.canFly || member.total_hours > 0;
 
-    // Dynamic Tailwind Colors based on config
+
     const bgGradient = `from-${config.color}-500 to-${config.color}-600`;
     const textLight = `text-${config.color}-200`;
     const bgSoft = `bg-${config.color}-500/20`;
     const textDark = `text-${config.color}-400`;
 
-    document.getElementById('main-content').innerHTML = /* html */ `
+    document.getElementById('main-content').innerHTML = `
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <button id="back-button" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group">
@@ -366,7 +366,7 @@ function renderProfileHTML(member, stats, flightLogs, transactions, config, user
 function setupEventListeners(userId) {
     document.getElementById('back-button').addEventListener('click', goBack);
 
-    // Settle Debt
+
     const settleBtn = document.getElementById('btn-settle-debt');
     if (settleBtn) {
         settleBtn.addEventListener('click', async () => {
@@ -374,9 +374,9 @@ function setupEventListeners(userId) {
                 settleDebtModal = new SettleDebtModal();
                 await settleDebtModal.init();
             }
-            // Pass current ID to pre-fill search
+
             settleDebtModal.show(() => {
-                // Refresh profile on success
+
                 renderMemberProfile();
             }, currentMemberId);
         });
@@ -388,12 +388,12 @@ function setupEventListeners(userId) {
             if (!addBookingModal) {
                 addBookingModal = new AddBookingModal();
             }
-            // Passing personId allows the modal to pre-fill this member as the Pilot/Student
+
             addBookingModal.show({ personId: currentMemberId });
         });
     }
 
-    // Add Flight Log
+
     const logBtn = document.getElementById('btn-add-log');
     if (logBtn) {
         logBtn.addEventListener('click', () => {
@@ -401,13 +401,13 @@ function setupEventListeners(userId) {
                 addFlightModal = new AddFlightLogModal();
             }
             addFlightModal.init().then(() => {
-                addFlightModal.show({ pilotId: userId }); // Auto-select as pilot
+                addFlightModal.show({ pilotId: userId });
                 addFlightModal.onSuccess(() => renderMemberProfile());
             });
         });
     }
 
-    // Flight Details Click
+
     document.addEventListener('click', (e) => {
         const flightItem = e.target.closest('.flight-item');
         if (flightItem) {
@@ -448,9 +448,9 @@ function renderErrorState() {
 }
 
 function goBack() {
-    // Cleanup modals
+
     cleanupMemberDetailsPage();
-    // Navigate
+
     window.dispatchEvent(new CustomEvent('navigate', { detail: { page: returnToPage } }));
 }
 
@@ -481,11 +481,11 @@ export function cleanupMemberDetailsPage() {
         addFlightModal = null;
     }
 
-    // START: Cleanup Booking Modal
+
     if (addBookingModal) {
-        // The close() method in AddBookingModal removes it from the DOM
+
         if (typeof addBookingModal.close === 'function') addBookingModal.close();
         addBookingModal = null;
     }
-    // END: Cleanup Booking Modal
+
 }

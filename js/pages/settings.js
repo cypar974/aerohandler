@@ -118,7 +118,7 @@ export async function loadSettingsPage() {
 
 async function loadSettings() {
     try {
-        // Load settings from localStorage or database
+
         const savedSettings = localStorage.getItem('aeroClubSettings');
         const savedPreferences = localStorage.getItem('aeroClubUserPreferences');
 
@@ -203,7 +203,7 @@ function getDefaultPreferences() {
 }
 
 function setupEventListeners() {
-    // Navigation
+
     document.querySelectorAll('.settings-nav-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             currentSection = e.target.closest('button').getAttribute('data-section');
@@ -211,17 +211,17 @@ function setupEventListeners() {
         });
     });
 
-    // Save button
+
     document.getElementById('save-settings').addEventListener('click', saveSettings);
 
-    // Reset button
+
     document.getElementById('reset-settings').addEventListener('click', resetSettings);
 }
 
 function renderCurrentSection() {
     const content = document.getElementById('settings-content');
 
-    // Update active navigation
+
     document.querySelectorAll('.settings-nav-btn').forEach(btn => {
         const section = btn.getAttribute('data-section');
         if (section === currentSection) {
@@ -889,7 +889,7 @@ function renderBackupSettings(container) {
 
 async function saveSettings() {
     try {
-        // Gather all settings from the form
+
         const settings = {
             general: {
                 schoolName: document.getElementById('school-name')?.value || appSettings.general.schoolName,
@@ -939,7 +939,7 @@ async function saveSettings() {
             }
         };
 
-        // Update user preferences
+
         const preferences = {
             dashboard: {
                 showFinancialCards: document.getElementById('show-financial-cards')?.checked || false,
@@ -954,15 +954,15 @@ async function saveSettings() {
             }
         };
 
-        // Save to localStorage
+
         localStorage.setItem('aeroClubSettings', JSON.stringify(settings));
         localStorage.setItem('aeroClubUserPreferences', JSON.stringify(preferences));
 
-        // Update global variables
+
         appSettings = settings;
         userPreferences = preferences;
 
-        // Show success message
+
         showNotification('Settings saved successfully!', 'success');
 
     } catch (error) {
@@ -985,17 +985,17 @@ function resetSettings() {
 }
 
 function showNotification(message, type = 'info') {
-    // Create notification element
+
     const notification = document.createElement('div');
     notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transform transition-transform duration-300 ${type === 'success' ? 'bg-green-600' :
-            type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        type === 'error' ? 'bg-red-600' : 'bg-blue-600'
         } text-white`;
     notification.textContent = message;
 
-    // Add to page
+
     document.body.appendChild(notification);
 
-    // Remove after 3 seconds
+
     setTimeout(() => {
         notification.remove();
     }, 3000);

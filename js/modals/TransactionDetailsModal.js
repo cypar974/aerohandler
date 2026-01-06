@@ -6,7 +6,7 @@ export class TransactionDetailsModal {
     constructor() {
         this.modal = null;
         this.currentTransaction = null;
-        this.paymentType = null; // Will act as transaction_direction
+        this.paymentType = null;
     }
 
     show(transactionData) {
@@ -16,11 +16,11 @@ export class TransactionDetailsModal {
             this.createModal();
         }
 
-        // Show loading state immediately when modal opens
+
         this.showLoadingState();
         this.modal.classList.remove('hidden');
 
-        // Trigger animation after DOM update
+
         requestAnimationFrame(() => {
             if (this.modal && this.modal.parentNode) {
                 const modalContent = this.modal.querySelector('.bg-gray-900');
@@ -29,7 +29,7 @@ export class TransactionDetailsModal {
                     modalContent.classList.add("scale-100", "opacity-100");
                 }
 
-                // Now populate the data after the modal is visible
+
                 this.populateData(transactionData);
             }
         });
@@ -37,14 +37,14 @@ export class TransactionDetailsModal {
 
     hide() {
         if (this.modal) {
-            // Animate out
+
             const modalContent = this.modal.querySelector('.bg-gray-900');
             if (modalContent) {
                 modalContent.classList.remove("scale-100", "opacity-100");
                 modalContent.classList.add("scale-95", "opacity-0");
             }
 
-            // Remove from DOM after animation
+
             setTimeout(() => {
                 this.modal.classList.add('hidden');
             }, 300);
@@ -111,14 +111,14 @@ export class TransactionDetailsModal {
             this.hide();
         });
 
-        // check for escape key press to close modal
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.hide();
             }
         });
 
-        // Close modal when clicking outside
+
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal) {
                 this.hide();
@@ -134,16 +134,16 @@ export class TransactionDetailsModal {
      * - paymentData.paid_at -> transaction.paid_at
      */
     generatePaymentHTML(paymentData, relatedDetails) {
-        // --- PERMISSIVE DEMO MODE ---
+
         const canEdit = true;
         const canMarkPaid = true;
-        // ----------------------------
 
-        const isReceivable = this.paymentType === 'receivable'; // Derived from transaction_direction
+
+        const isReceivable = this.paymentType === 'receivable';
         const amountClass = isReceivable ? 'text-green-400' : 'text-red-400';
         const statusColor = getStatusColor(paymentData.status);
 
-        return /*html*/ `
+        return `
         <div class="space-y-6">
             <div class="bg-gray-800 p-4 rounded-lg">
                 <div class="flex justify-between items-start">
@@ -225,7 +225,7 @@ export class TransactionDetailsModal {
                 </div>
             ` : ''}
 
-            ${paymentData.status === 'pending' || paymentData.status === 'overdue' ? /*html*/ `
+            ${paymentData.status === 'pending' || paymentData.status === 'overdue' ? `
                 <div class="bg-gray-800 p-4 rounded-lg">
                     <h4 class="font-semibold mb-3 text-gray-300">Actions</h4>
                     <div class="flex space-x-2">
@@ -244,7 +244,7 @@ export class TransactionDetailsModal {
     `;
 
         function getStatusColor(status) {
-            // Mapping to transaction_status_enum
+
             switch (status) {
                 case 'paid': return 'bg-green-600';
                 case 'pending': return 'bg-yellow-600';
@@ -257,19 +257,19 @@ export class TransactionDetailsModal {
 
     async populateData(transactionData, isPayment = false) {
         try {
-            // Show initial loading state
+
             this.updateLoadingProgress(0, "Starting to load transaction details...");
 
             const content = document.getElementById('transaction-details-content');
 
-            // 1. Determine ID. 
+
             const transactionId = transactionData.transaction_id || transactionData.id;
 
             this.updateLoadingProgress(30, "Fetching fresh transaction data...");
 
-            // 2. Fetch Fresh Data (Secure RPC)
-            // UPDATED: Use api.get_financial_ledger instead of direct view access.
-            // We chain .eq() to get the specific record.
+
+
+
             const { data: fullRecord, error } = await supabase
                 .schema('api')
                 .rpc('get_financial_ledger')
@@ -278,7 +278,7 @@ export class TransactionDetailsModal {
 
             if (error) throw error;
 
-            // Set paymentType for UI logic
+
             this.paymentType = fullRecord.transaction_direction;
 
             let relatedDetails = {
@@ -290,7 +290,7 @@ export class TransactionDetailsModal {
                 }
             };
 
-            // 3. Fetch Flight Logs if needed (Existing RPC is fine)
+
             if (fullRecord.flight_log_id) {
                 this.updateLoadingProgress(60, "Fetching flight log...");
                 const { data: flightData } = await supabase
@@ -300,15 +300,15 @@ export class TransactionDetailsModal {
                 relatedDetails.flightLog = flightData;
             }
 
-            // UPDATED: Removed direct fetch to 'financial_transactions'.
-            // The view (and thus the RPC) should be the Single Source of Truth.
-            // If fields like 'notes' are missing, they should be added to the SQL View definition.
+
+
+
             const displayData = fullRecord;
 
             this.updateLoadingProgress(100, "Finalizing display...");
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // Smooth transition to content
+
             if (content) {
                 content.style.opacity = '0.7';
                 content.style.transition = 'opacity 0.4s ease';
@@ -339,7 +339,7 @@ export class TransactionDetailsModal {
         const content = document.getElementById('transaction-details-content');
         const headerIndicator = document.getElementById('modal-loading-indicator');
 
-        // Create loading indicator in header if it doesn't exist
+
         if (!headerIndicator && this.modal) {
             const header = this.modal.querySelector('.flex.justify-between.items-center.mb-6');
             if (header) {
@@ -393,7 +393,7 @@ export class TransactionDetailsModal {
             </div>
         `;
 
-            // Add retry functionality
+
             const retryBtn = document.getElementById('retry-loading');
             if (retryBtn && this.currentTransaction) {
                 retryBtn.addEventListener('click', () => {
@@ -435,19 +435,19 @@ export class TransactionDetailsModal {
     `;
     }
 
-    // Deprecated in new architecture, but kept as a stub if needed
+
     async fetchRelatedDetails(sourceTable, sourceId) {
-        // Logic moved into populateData main flow
+
         return {};
     }
 
     generateTransactionHTML(transaction, relatedDetails) {
-        // Map transaction_direction to Incoming/Outgoing logic
+
         const isIncoming = transaction.transaction_direction === 'receivable';
         const amountClass = isIncoming ? 'text-green-400' : 'text-red-400';
         const amountSign = isIncoming ? '+' : '-';
 
-        // Map paid_at or created_at
+
         const dateDisplay = transaction.paid_at
             ? new Date(transaction.paid_at).toLocaleDateString()
             : new Date(transaction.created_at).toLocaleDateString();
@@ -580,7 +580,7 @@ export class TransactionDetailsModal {
     }
 
     setupProfileLinks() {
-        // Student profile links
+
         document.querySelectorAll('.view-student-profile').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const studentId = e.target.getAttribute('data-student-id');
@@ -588,7 +588,7 @@ export class TransactionDetailsModal {
             });
         });
 
-        // Instructor profile links
+
         document.querySelectorAll('.view-instructor-profile').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const instructorId = e.target.getAttribute('data-instructor-id');
@@ -596,7 +596,7 @@ export class TransactionDetailsModal {
             });
         });
 
-        // Action buttons for payments
+
         document.querySelectorAll('.mark-paid-action').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.markPaymentAsPaid();
@@ -613,7 +613,7 @@ export class TransactionDetailsModal {
     markPaymentAsPaid() {
         if (this.currentTransaction && window.paymentModal) {
             this.hide();
-            // Pass the unified transaction ID
+
             const id = this.currentTransaction.id || this.currentTransaction.transaction_id;
 
             window.paymentModal.show({
@@ -621,7 +621,7 @@ export class TransactionDetailsModal {
                 type: this.paymentType,
                 amount: this.currentTransaction.amount
             }, () => {
-                // Refresh data after payment
+
                 if (window.loadFinanceData) {
                     window.loadFinanceData();
                 }
@@ -630,22 +630,22 @@ export class TransactionDetailsModal {
     }
 
     editPayment() {
-        // Placeholder for edit functionality
+
         showToast('Edit transaction functionality coming soon!', 'info');
     }
 
     async showForPayment(paymentData, paymentType = 'receivable') {
-        // In the new schema, "Payments" and "Transactions" are the same table.
-        // We just need to make sure the passed object has the structure we need.
+
+
         this.paymentType = paymentType === 'receivable' ? 'receivable' : 'payable';
 
         if (!this.modal) {
             this.createModal();
         }
 
-        // We assume paymentData is already a row from
-        // If it's a legacy object, we might need a converter, but for this refactor 
-        // we assume the caller is sending new schema data.
+
+
+
         this.populateData(paymentData);
         this.modal.classList.remove('hidden');
     }
@@ -653,12 +653,12 @@ export class TransactionDetailsModal {
     navigateToStudentProfile(studentId) {
         showToast(`Navigating to student profile: ${studentId}`, 'info');
         console.log('Navigate to student profile:', studentId);
-        // window.location.href = `/students.html?id=${studentId}`;
+
     }
 
     navigateToInstructorProfile(instructorId) {
         showToast(`Navigating to instructor profile: ${instructorId}`, 'info');
         console.log('Navigate to instructor profile:', instructorId);
-        // window.location.href = `/instructors.html?id=${instructorId}`;
+
     }
 }

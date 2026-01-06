@@ -1,13 +1,13 @@
 // ./js/components/customTimePicker.js
 export class CustomTimePicker {
     constructor(inputElement) {
-        // Prevent multiple instances on the same input
+
         if (inputElement._customTimePicker) {
             inputElement._customTimePicker.destroy();
         }
 
         this.input = inputElement;
-        this.input._customTimePicker = this; // Tag the input
+        this.input._customTimePicker = this;
 
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -22,30 +22,30 @@ export class CustomTimePicker {
     init() {
         if (this.isMobile) return;
 
-        // Hide the native picker but keep it functional
+
         this.input.style.opacity = '0';
         this.input.style.position = 'absolute';
         this.input.style.width = '0';
         this.input.style.height = '0';
         this.input.style.pointerEvents = 'none';
 
-        // Create custom picker container
+
         this.pickerContainer = document.createElement('div');
         this.pickerContainer.className = 'custom-time-picker-container relative';
 
-        // Create display input
+
         this.displayInput = document.createElement('input');
         this.displayInput.type = 'text';
         this.displayInput.className = this.input.className;
         this.displayInput.placeholder = this.input.placeholder || 'Select time';
         this.displayInput.readOnly = true;
 
-        // Create time dropdown
-        // Added styling to force opacity and visibility
+
+
         this.timePicker = document.createElement('div');
         this.timePicker.className = 'custom-time-picker hidden absolute left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-4 w-56';
 
-        // Inline styles for safety (Z-index and Background)
+
         this.timePicker.style.zIndex = '9999';
         this.timePicker.style.backgroundColor = '#1f2937';
 
@@ -143,10 +143,10 @@ export class CustomTimePicker {
     handleDisplayClick() {
         this.timePicker.classList.toggle('hidden');
 
-        // IMPORTANT: Calculate position immediately after showing
+
         if (!this.timePicker.classList.contains('hidden')) {
-            this.positionTimePicker(); // Position first
-            this.initializeTempState(); // Then setup state
+            this.positionTimePicker();
+            this.initializeTempState();
             this.scrollToSelection();
         }
     }
@@ -156,15 +156,15 @@ export class CustomTimePicker {
     }
 
     renderTimePicker() {
-        // CHANGE 1: Define styles to hide the scrollbar
+
         const noScrollStyle = `
             <style>
                 .no-scrollbar::-webkit-scrollbar {
                     display: none;
                 }
                 .no-scrollbar {
-                    -ms-overflow-style: none;  /* IE and Edge */
-                    scrollbar-width: none;  /* Firefox */
+                    -ms-overflow-style: none;  
+                    scrollbar-width: none;  
                 }
             </style>
         `;
@@ -257,23 +257,23 @@ export class CustomTimePicker {
     }
 
     positionTimePicker() {
-        // 1. CRITICAL: Reset positions to default (opening downwards)
-        // We MUST reset 'bottom' to auto, otherwise if it was previously set to '100%',
-        // setting top to '100%' will create a conflict (stretching the element to 0 height).
+
+
+
         this.timePicker.style.top = '100%';
         this.timePicker.style.bottom = 'auto';
         this.timePicker.style.left = '0';
 
-        // 2. Measure dimensions
+
         const rect = this.pickerContainer.getBoundingClientRect();
         const pickerRect = this.timePicker.getBoundingClientRect();
 
-        // 3. Check if we have space below
-        // rect.bottom is the bottom edge of the input field
-        // pickerRect.height is the height of the dropdown
-        // window.innerHeight is the viewport height
+
+
+
+
         if (rect.bottom + pickerRect.height > window.innerHeight) {
-            // Not enough space below, flip to top
+
             this.timePicker.style.top = 'auto';
             this.timePicker.style.bottom = '100%';
         }

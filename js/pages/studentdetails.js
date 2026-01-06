@@ -23,18 +23,18 @@ let returnToPage = 'students';
 export async function loadStudentDetailsPage(studentId = null, sourcePage = 'students') {
     const hash = window.location.hash;
 
-    // CHANGE 2: Use the explicit sourcePage argument
+
     returnToPage = sourcePage || 'students';
 
-    // CHANGE 3: Simplified ID logic (argument takes precedence, then hash)
+
     let identifier = studentId;
 
     if (!identifier) {
-        // Fallback: extract from hash if no argument provided
+
         identifier = hash.replace('#student/', '');
     }
 
-    // Handle edge case if studentId passed as an object (legacy support)
+
     if (studentId && typeof studentId === 'object') {
         identifier = studentId.studentId || studentId.id;
         if (studentId.backPage) returnToPage = studentId.backPage;
@@ -45,21 +45,21 @@ export async function loadStudentDetailsPage(studentId = null, sourcePage = 'stu
         return;
     }
 
-    // Save state for back button
+
     previousPageState = {
         page: document.getElementById('main-content').innerHTML,
         scrollPosition: window.scrollY
     };
 
-    // Go straight to render
+
     await renderStudentProfile(identifier);
 }
 
 async function renderStudentProfileByNumber(studentNumber) {
     showLoading(true);
     try {
-        // Since we can't do direct select on 'students' table due to RLS/Lockdown,
-        // we use the RPC to get all students and find the one we need.
+
+
         const { data: allStudents, error } = await supabase
             .schema('api')
             .rpc('get_students');
@@ -106,15 +106,15 @@ async function renderStudentProfile(studentId) {
             await createInvoiceModal.init();
         }
 
-        // Calculate date range for upcoming bookings (Next 6 months)
+
         const startDate = new Date().toISOString();
         const endDate = new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString();
 
-        // --- STEP 1: RESOLVE USER ID (MUST BE FIRST) ---
-        // We need the User ID because Flight Logs & Bookings are linked to the 'users' table.
+
+
         let userId = null;
 
-        // Call the specific SQL function to find the user linked to this student
+
         const { data: userAccounts, error: userError } = await supabase
             .schema('api')
             .rpc('get_user_by_person_id', { target_person_id: studentId });
@@ -125,7 +125,7 @@ async function renderStudentProfile(studentId) {
             console.warn("No User Account found for this Student. Logs may be empty.");
         }
 
-        // --- STEP 2: FETCH DATA (NOW WE CAN SAFELY USE userId) ---
+
         const [
             studentResult,
             flightLogsResult,
@@ -133,28 +133,28 @@ async function renderStudentProfile(studentId) {
             bookingsResult,
             planesResult
         ] = await Promise.all([
-            // 1. Student data
+
             supabase.schema('api').rpc('get_student_by_id', { student_uuid: studentId }).single(),
 
-            // 2. Flight logs (Uses the userId we just found)
+
             userId ? supabase.schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId }) : { data: [] },
 
-            // 3. Financial Transactions (Uses the userId we just found)
+
             userId ? supabase.schema('api').rpc('get_transactions_by_person', { person_uuid: userId }) : { data: [] },
 
-            // 4. Upcoming bookings (Raw Data)
+
             supabase.schema('api').rpc('get_bookings_by_date_range', {
                 start_date: startDate,
                 end_date: endDate
             }),
 
-            // 5. Planes (To map UUID -> Tail Number)
+
             supabase.schema('api').rpc('get_planes')
         ]);
 
         if (studentResult.error) throw studentResult.error;
 
-        // Log non-critical errors
+
         if (flightLogsResult.error) console.error('Error fetching logs:', flightLogsResult.error);
         if (transactionsResult.error) console.error('Error fetching transactions:', transactionsResult.error);
 
@@ -164,16 +164,16 @@ async function renderStudentProfile(studentId) {
         const allPlanes = planesResult.data || [];
         const rawBookings = bookingsResult.data || [];
 
-        // --- STEP 3: PROCESS DATA ---
 
-        // Financials
+
+
         const pendingPayments = allTransactions.filter(t =>
             t.transaction_direction === 'receivable' &&
             (t.status === 'pending' || t.status === 'overdue')
         );
         const paymentHistory = allTransactions.filter(t => t.status === 'paid');
 
-        // Bookings (Filter for this student + Join Plane Data)
+
         const studentBookings = rawBookings.filter(b =>
             (userId && b.pilot_id === userId) ||
             (userId && b.student2_id === userId) ||
@@ -195,7 +195,7 @@ async function renderStudentProfile(studentId) {
             };
         });
 
-        // Statistics
+
         const statistics = calculateStudentStatistics(
             student,
             flightLogs,
@@ -240,12 +240,12 @@ function calculateStudentStatistics(student, flightLogs, pendingPayments, paymen
 
 function renderProfileHTML(student, stats, flightLogs, pendingPayments, upcomingBookings) {
     const s = student;
-    const canEdit = true; // Demo logic
+    const canEdit = true;
 
-    // Status logic (default to active if missing)
+
     const displayStatus = 'Active';
 
-    document.getElementById('main-content').innerHTML = /* html */ `
+    document.getElementById('main-content').innerHTML = `
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <button id="back-button" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group">
@@ -491,7 +491,7 @@ function setupStudentDetailsEventListeners(studentId) {
     const editBtn = document.getElementById('edit-profile-btn');
     if (editBtn) {
         editBtn.addEventListener('click', async () => {
-            // Since we have the ID, we can edit directly
+
             editStudent(studentId);
         });
     }
@@ -578,9 +578,9 @@ async function handleQuickAction(action, studentId) {
                 await settleDebtModal.init();
             }
 
-            // Show modal and pass studentId to pre-fill the search
+
             settleDebtModal.show(() => {
-                // Refresh profile to update "Pending Payments" stats
+
                 renderStudentProfile(studentId);
             }, studentId);
             break;
@@ -595,7 +595,7 @@ async function handleQuickAction(action, studentId) {
 }
 
 function createAddBookingModal(studentId) {
-    // Ensure we are passing the PersonID (student UUID) to the modal
+
     const modal = new AddBookingModal();
     modal.onSuccess(async () => {
         showToast('Booking created!', 'success');
@@ -605,7 +605,7 @@ function createAddBookingModal(studentId) {
     modal.onClose(() => closeActiveModal());
     currentBookingModal = modal;
 
-    // Pass personId to the modal
+
     modal.show({ personId: studentId }).catch(err => {
         console.error('Booking modal error:', err);
         showToast('Error opening booking form', 'error');

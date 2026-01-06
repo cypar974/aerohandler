@@ -33,7 +33,7 @@ const permissions = {
 };
 
 export async function loadPlanesPage() {
-    // Pre-fetch plane models for the cache and the add-modal
+
     await fetchPlaneModels();
 
     document.getElementById("main-content").innerHTML = `
@@ -144,7 +144,7 @@ export async function loadPlanesPage() {
 
     `;
 
-    // Inject "Add Plane" Modal
+
     document.body.insertAdjacentHTML('beforeend', `
         <div id="plane-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
             <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -223,7 +223,7 @@ export async function loadPlanesPage() {
 
     await fetchPlanes();
 
-    // Event Listeners
+
     if (permissions.canAdd) {
         document.getElementById("add-plane-btn")?.addEventListener("click", showPlaneModal);
         document.getElementById("empty-add-btn")?.addEventListener("click", showPlaneModal);
@@ -231,7 +231,7 @@ export async function loadPlanesPage() {
     document.getElementById("close-plane-modal").addEventListener("click", hidePlaneModal);
     document.getElementById("cancel-plane-btn").addEventListener("click", hidePlaneModal);
 
-    // --- NEW: Toggle "Add New Model" inputs ---
+
     const modelSelect = document.getElementById("plane-model-select");
     const newModelContainer = document.getElementById("new-model-container");
     const newModelNameInput = document.getElementById("new-model-name");
@@ -244,30 +244,30 @@ export async function loadPlanesPage() {
         } else {
             newModelContainer.classList.add("hidden");
             newModelNameInput.required = false;
-            newModelNameInput.value = ""; // Clear
+            newModelNameInput.value = "";
         }
     });
 
-    // --- UPDATED: Submit handler with Logic for Creating New Model ---
+
     document.getElementById("add-plane-form").addEventListener("submit", async (e) => {
         e.preventDefault();
 
         const tailNumber = document.getElementById("plane-tail-number").value;
         const status = document.getElementById("plane-status").value;
-        let modelId = document.getElementById("plane-model-select").value; // UUID or "new_model_option"
+        let modelId = document.getElementById("plane-model-select").value;
 
-        // 1. Handle New Model Creation if selected
+
         if (modelId === "new_model_option") {
             const newName = document.getElementById("new-model-name").value;
-            const newCategory = document.getElementById("new-model-category").value; // "SE" or "ME"
+            const newCategory = document.getElementById("new-model-category").value;
 
             if (!newName) {
                 showToast("Please enter a name for the new model", "error");
                 return;
             }
 
-            // Call RPC to create the model first
-            // Note: api.insert_plane_model expects JSONB payload with model_name and category
+
+
             const { data: newModel, error: modelError } = await supabase
                 .schema('api')
                 .rpc('insert_plane_model', {
@@ -282,14 +282,14 @@ export async function loadPlanesPage() {
                 return;
             }
 
-            // Use the ID of the newly created model
+
             modelId = newModel.id;
 
-            // Refresh the cache so the next time we open the modal, this model is available
+
             await fetchPlaneModels();
         }
 
-        // 2. Construct RPC Payload for the Plane
+
         const payload = {
             tail_number: tailNumber,
             model_id: modelId,
@@ -297,7 +297,7 @@ export async function loadPlanesPage() {
             hours_flown: 0
         };
 
-        // 3. Create the Plane using RPC api.insert_plane
+
         const { error } = await supabase.schema('api').rpc('insert_plane', { payload });
 
         if (!error) {
@@ -341,10 +341,10 @@ async function fetchPlaneModels() {
 
 // Helper to fetch members (used for Autocomplete)
 async function fetchMembers() {
-    // Only fetch if cache is empty
+
     if (membersCache.length > 0) return;
 
-    // We use  as required by autocomplete.js config
+
     const { data, error } = await getMembers();
     if (!error && data) {
         membersCache = data;
@@ -361,19 +361,19 @@ function getModelName(modelId) {
 
 
 function renderStatus(status) {
-    // Map SQL enums to UI Icons
+
     switch (status) {
         case "available":
-            return "✅";   // available
-        case "in_use": // Calculated state, not in SQL enum but used in UI logic
-            return "✈️";   // in flight / in use
+            return "✅";
+        case "in_use":
+            return "✈️";
         case "maintenance":
-            return "🛠️";   // under maintenance
+            return "🛠️";
         case "out_of_service":
-        case "unavailable": // Fallback for old data
-            return "❌";   // grounded / unavailable
+        case "unavailable":
+            return "❌";
         default:
-            return "ℹ️";   // fallback
+            return "ℹ️";
     }
 }
 
@@ -455,24 +455,24 @@ function updateSortArrows() {
 }
 
 async function loadPlaneMenu(planeId) {
-    // 1. Fetch Plane with RPC
+
     const { data: pData, error } = await supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: planeId });
     if (error || !pData || pData.length === 0) {
         showToast("Error loading plane: " + (error ? error.message : "Not found"), "error");
         return;
     }
 
-    // api.get_plane_by_id returns an array (SETOF), take first
+
     const p = pData[0];
-    // Map model_id to string
+
     p.model = getModelName(p.model_id);
 
-    // 2. Fetch recent flight activity using RPC
+
     const { data: recentFlights, error: flightsError } = await supabase
         .schema('api').rpc('get_flight_logs_by_plane', { plane_uuid: planeId });
-    // RPC sorts by date desc already
 
-    // 3. Fetch maintenance records using RPC
+
+
     const { data: maintenanceRecords, error: maintenanceError } = await supabase
         .schema('api').rpc('get_maintenance_by_plane', { plane_uuid: planeId });
 
@@ -604,22 +604,22 @@ async function loadPlaneMenu(planeId) {
         loadFutureBookings(planeId);
     });
     document.getElementById("maintenance-history-btn").addEventListener("click", () => {
-        // Current: showToast("Maintenance history feature coming soon!", "info");
 
-        // New Implementation:
+
+
         maintenanceModal.show(planeId, p.tail_number);
     });
     document.getElementById("fuel-oil-btn").addEventListener("click", () => {
-        // OLD: showToast("Fuel & oil tracking feature coming soon!", "info");
 
-        // NEW:
+
+
         fuelModal.show(planeId, p.tail_number);
     });
 }
 
 // Render the Booking Modal Template (with Autocomplete hooks)
 function renderBookingModal() {
-    // Avoid duplicate injection
+
     if (document.getElementById("booking-modal")) return;
 
     document.body.insertAdjacentHTML('beforeend', `
@@ -682,7 +682,7 @@ function renderBookingModal() {
         </div>
     `);
 
-    // Setup close handlers
+
     const modal = document.getElementById("booking-modal");
     const closeBtn = document.getElementById("close-booking-modal");
     const cancelBtn = document.getElementById("cancel-booking-btn");
@@ -697,7 +697,7 @@ function renderBookingModal() {
 }
 
 async function loadFutureBookings(planeId) {
-    // 0. Ensure we have data for the autocomplete before rendering
+
     await fetchMembers();
 
     const { data: pData, error: planeError } = await supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: planeId });
@@ -709,7 +709,7 @@ async function loadFutureBookings(planeId) {
     const plane = pData[0];
     plane.model = getModelName(plane.model_id);
 
-    // Fetch future bookings using RPC
+
     const { data: allBookings, error: bookingsError } = await supabase
         .schema('api').rpc('get_bookings_by_plane', { plane_uuid: planeId });
 
@@ -718,33 +718,33 @@ async function loadFutureBookings(planeId) {
         return;
     }
 
-    // Filter in JS to preserve logic (Constraint: Logic Lock)
+
     const now = new Date();
     const futureBookings = allBookings.filter(b => new Date(b.start_time) >= now);
 
-    // Fetch related data using 
+
     let studentsMap = new Map();
     let instructorsMap = new Map();
 
     if (futureBookings && futureBookings.length > 0) {
-        // Use cached members for mapping names
+
         if (membersCache.length === 0) await fetchMembers();
 
         futureBookings.forEach(b => {
             const resolveName = (userId) => {
-                // Assumingw IDs align or we map via Users table. 
-                // For simplicity in this demo integration, checking cached members directly.
-                const member = membersCache.find(m => m.id === userId || m.user_id === userId); // Handle likely ID mismatch scenarios
+
+
+                const member = membersCache.find(m => m.id === userId || m.user_id === userId);
                 return member;
             };
 
-            // Instructors
+
             if (b.instructor_id) {
                 const member = resolveName(b.instructor_id);
                 if (member) instructorsMap.set(b.instructor_id, member);
             }
 
-            // Pilots/Students
+
             const studentIds = [b.pilot_id, b.student2_id, b.student3_id].filter(Boolean);
             studentIds.forEach(sid => {
                 const member = resolveName(sid);
@@ -823,9 +823,9 @@ async function loadFutureBookings(planeId) {
                                     ${futureBookings.map(booking => {
         const startTime = new Date(booking.start_time);
         const endTime = new Date(booking.end_time);
-        const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+        const duration = (endTime - startTime) / (1000 * 60 * 60);
 
-        // Pass map to helper
+
         const studentNames = getStudentNamesFromMap(booking, studentsMap);
         const instructor = booking.instructor_id ? instructorsMap.get(booking.instructor_id) : null;
         const instructorName = instructor ?
@@ -908,15 +908,15 @@ async function loadFutureBookings(planeId) {
         </div>
     `;
 
-    // Ensure Modal DOM exists and inject if missing
+
     renderBookingModal();
 
-    // Back button event
+
     document.getElementById("back-to-plane-menu").addEventListener("click", () => {
         loadPlaneMenu(planeId);
     });
 
-    // View toggle events
+
     document.getElementById("list-view-btn").addEventListener("click", () => {
         document.getElementById("list-view").classList.remove("hidden");
         document.getElementById("calendar-view").classList.add("hidden");
@@ -936,39 +936,39 @@ async function loadFutureBookings(planeId) {
         renderCalendarView(futureBookings, plane, studentsMap);
     });
 
-    // --- REVISITED AUTOCOMPLETE INTEGRATION ---
-    // Action buttons
+
+
     document.getElementById("add-booking-btn").addEventListener("click", () => {
-        // Show the modal
+
         const modal = document.getElementById("booking-modal");
         modal.classList.remove("hidden");
 
-        // Initialize Autocomplete for Pilot
+
         setupPersonAutocomplete({
             inputId: 'booking-pilot-search',
             hiddenId: 'booking-pilot-id',
             peopleData: membersCache,
-            roleFilter: 'pilots', // Show pilots and students
+            roleFilter: 'pilots',
             onSelect: (selected) => {
                 console.log("Selected Pilot:", selected);
             }
         });
 
-        // Initialize Autocomplete for Instructor
+
         setupPersonAutocomplete({
             inputId: 'booking-instructor-search',
             hiddenId: 'booking-instructor-id',
             peopleData: membersCache,
-            roleFilter: 'instructors', // Show only instructors
+            roleFilter: 'instructors',
             onSelect: (selected) => {
                 console.log("Selected Instructor:", selected);
             }
         });
     });
 
-    // Booking Form Submission Handler (Mock implementation)
+
     const bookingForm = document.getElementById("add-booking-form");
-    // Remove old listeners to prevent duplicates if re-rendered
+
     const newForm = bookingForm.cloneNode(true);
     bookingForm.parentNode.replaceChild(newForm, bookingForm);
 
@@ -997,7 +997,7 @@ async function loadFutureBookings(planeId) {
         }
         showToast("Booking added successfully!", "success");
         document.getElementById("booking-modal").classList.add("hidden");
-        // Reload to show new booking (if RPC was active)
+
         loadFutureBookings(planeId);
 
     });
@@ -1007,7 +1007,7 @@ async function loadFutureBookings(planeId) {
         exportScheduleToCSV(futureBookings, plane, studentsMap, instructorsMap);
     });
 
-    // Edit and Cancel booking buttons
+
     document.querySelectorAll('.edit-booking').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const bookingId = e.target.getAttribute('data-id');
@@ -1033,22 +1033,22 @@ async function loadFlightHistory(planeId) {
     const plane = pData[0];
     plane.model = getModelName(plane.model_id);
 
-    // Fetch flight history using RPC
+
     const { data: flightHistory, error: flightsError } = await supabase
         .schema('api').rpc('get_flight_logs_by_plane', { plane_uuid: planeId });
-    // Note: RPC sorts desc by default
+
 
     if (flightsError) {
         showToast("Error loading flight history: " + flightsError.message, "error");
         return;
     }
 
-    // Reuse logic to fetch names if needed, similar to bookings, using View
+
     let studentsMap = new Map();
     let instructorsMap = new Map();
 
     if (flightHistory && flightHistory.length > 0) {
-        // Use cached members
+
         if (membersCache.length === 0) await fetchMembers();
 
         flightHistory.forEach(f => {
@@ -1190,12 +1190,12 @@ async function loadFlightHistory(planeId) {
         </div>
     `;
 
-    // Back button event
+
     document.getElementById("back-to-plane-menu").addEventListener("click", () => {
         loadPlaneMenu(planeId);
     });
 
-    // View flight details
+
     document.querySelectorAll('.view-flight-details').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const flightId = e.target.getAttribute('data-id');
@@ -1203,7 +1203,7 @@ async function loadFlightHistory(planeId) {
         });
     });
 
-    // Export functionality
+
     document.getElementById('export-csv').addEventListener('click', () => {
         exportFlightHistoryToCSV(flightHistory, plane);
     });
@@ -1214,8 +1214,8 @@ async function loadFlightHistory(planeId) {
 }
 
 function viewFlightDetails(flightId) {
-    // You can implement a detailed flight view modal here
-    // For now, show a simple alert with basic info
+
+
     showToast(`Flight details view for ID: ${flightId} - To be implemented`, 'info');
 }
 
@@ -1228,7 +1228,7 @@ function exportFlightHistoryToCSV(flightHistory, plane) {
     const headers = ['Date', 'Pilot', 'Departure', 'Arrival', 'Duration', 'Type', 'Remarks'];
     const csvData = flightHistory.map(flight => [
         new Date(flight.flight_date).toLocaleDateString(),
-        flight.pilot_uuid, // CSV will show UUID for now in Demo Mode
+        flight.pilot_uuid,
         flight.departure_icao,
         flight.arrival_icao,
         flight.flight_duration,
@@ -1263,14 +1263,14 @@ function isToday(date) {
 
 function isThisWeek(date) {
     const today = new Date();
-    // Get Monday of this week (set to Monday)
+
     const startOfWeek = new Date(today);
     const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
     startOfWeek.setDate(diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // Get Sunday of this week
+
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23, 59, 59, 999);
@@ -1280,14 +1280,14 @@ function isThisWeek(date) {
 
 function isNextWeek(date) {
     const today = new Date();
-    // Get Monday of next week
+
     const startOfNextWeek = new Date(today);
     const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7; // this Monday + 7 days
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7;
     startOfNextWeek.setDate(diff);
     startOfNextWeek.setHours(0, 0, 0, 0);
 
-    // Get Sunday of next week
+
     const endOfNextWeek = new Date(startOfNextWeek);
     endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
     endOfNextWeek.setHours(23, 59, 59, 999);
@@ -1298,7 +1298,7 @@ function isNextWeek(date) {
 function getUniqueStudentsCount(bookings) {
     const studentIds = new Set();
     bookings.forEach(booking => {
-        if (booking.pilot_id) studentIds.add(booking.pilot_id); // using pilot_id as main field from SQL
+        if (booking.pilot_id) studentIds.add(booking.pilot_id);
         if (booking.student2_id) studentIds.add(booking.student2_id);
         if (booking.student3_id) studentIds.add(booking.student3_id);
     });
@@ -1330,34 +1330,34 @@ function renderCalendarView(bookings, plane, studentsMap) {
     const container = document.getElementById('calendar-container');
     if (!container) return;
 
-    // Simple calendar implementation starting on Monday
+
     const today = new Date();
     const month = today.getMonth();
     const year = today.getFullYear();
 
-    // Get first day of month and number of days
+
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
 
     let calendarHTML = '';
 
-    // Day headers starting with Monday
+
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     dayNames.forEach(day => {
         calendarHTML += `<div class="text-center font-semibold p-2 bg-gray-700">${day}</div>`;
     });
 
-    // Adjust first day: 0=Sunday, 1=Monday, etc. Convert to Monday-start (0=Monday, 6=Sunday)
-    let firstDayAdjusted = firstDay.getDay() - 1;
-    if (firstDayAdjusted < 0) firstDayAdjusted = 6; // If Sunday (0-1=-1), make it 6
 
-    // Empty cells for days before the first day of month (Monday-start)
+    let firstDayAdjusted = firstDay.getDay() - 1;
+    if (firstDayAdjusted < 0) firstDayAdjusted = 6;
+
+
     for (let i = 0; i < firstDayAdjusted; i++) {
         calendarHTML += `<div class="h-24 bg-gray-900 border border-gray-700"></div>`;
     }
 
-    // Days of the month
+
     for (let day = 1; day <= daysInMonth; day++) {
         const currentDate = new Date(year, month, day);
         const dayBookings = bookings ? bookings.filter(booking => {
@@ -1394,14 +1394,14 @@ function renderCalendarView(bookings, plane, studentsMap) {
 
 async function cancelBooking(bookingId, planeId) {
     if (confirm('Are you sure you want to cancel this booking?')) {
-        // Use RPC api.delete_booking
+
         const { error } = await supabase.schema('api').rpc('delete_booking', { booking_uuid: bookingId });
 
         if (error) {
             showToast('Error cancelling booking: ' + error.message, 'error');
         } else {
             showToast('Booking cancelled successfully!', 'success');
-            // Refresh the current view
+
             loadFutureBookings(planeId);
         }
     }
@@ -1470,14 +1470,14 @@ function showLoading(show) {
 
 async function fetchPlanes() {
     showLoading(true);
-    // Use RPC api.get_planes
+
     const { data, error } = await supabase.schema('api').rpc('get_planes');
 
-    // Ensure we have models loaded to map names
+
     if (!planeModelsCache.length) await fetchPlaneModels();
 
     if (!error) {
-        // Map model_id UUID to model_name string for the UI table
+
         planesData = data.map(p => ({
             ...p,
             model: getModelName(p.model_id)
@@ -1492,7 +1492,7 @@ async function fetchPlanes() {
 
 function showPlaneModal() {
     document.getElementById("plane-modal").classList.remove("hidden");
-    // Ensure select is populated if cache updated late
+
     const select = document.getElementById("plane-model-select");
     if (select && select.options.length <= 1 && planeModelsCache.length > 0) {
         select.innerHTML = '<option value="">Select a model...</option>' +
@@ -1506,7 +1506,7 @@ function hidePlaneModal() {
     document.getElementById("plane-modal").classList.add("hidden");
     document.getElementById("add-plane-form").reset();
 
-    // Hide new model container on close
+
     const newModelContainer = document.getElementById("new-model-container");
     const newModelNameInput = document.getElementById("new-model-name");
     if (newModelContainer) newModelContainer.classList.add("hidden");

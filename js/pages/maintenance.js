@@ -8,7 +8,7 @@ let maintenanceRecords = [];
 let planes = [];
 let technicians = [];
 let activeModal = null;
-let currentFilter = 'active'; // 'active' | 'history'
+let currentFilter = 'active';
 let sortState = { column: 'created_at', direction: 'desc' };
 
 // --- CLEANUP MANAGEMENT ---
@@ -17,10 +17,10 @@ let cleanupFunctions = [];
 export async function loadMaintenancePage() {
     console.log('Loading maintenance page...');
 
-    // 1. Clean up previous instances
+
     cleanupMaintenancePage();
 
-    // 2. Set up the basic skeleton (Loading State)
+
     document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col h-full text-white relative">
             <div class="flex justify-between items-center mb-6">
@@ -32,7 +32,7 @@ export async function loadMaintenancePage() {
         </div>
     `;
 
-    // 3. Fetch Data & Render
+
     try {
         await fetchData();
         renderMainLayout();
@@ -44,7 +44,7 @@ export async function loadMaintenancePage() {
 
 // --- DATA LAYER ---
 async function fetchData() {
-    // Parallel fetch for speed
+
     const [planesRes, maintRes, techsRes] = await Promise.all([
         supabase.schema('api').rpc('get_planes'),
         supabase.schema('api').rpc('get_maintenance_records'),
@@ -53,7 +53,7 @@ async function fetchData() {
 
     if (planesRes.error) throw new Error("Failed to load Fleet: " + planesRes.error.message);
     if (maintRes.error) throw new Error("Failed to load Maintenance Records: " + maintRes.error.message);
-    // Techs are optional, don't throw hard error
+
 
     planes = planesRes.data || [];
     maintenanceRecords = maintRes.data || [];
@@ -85,13 +85,13 @@ function renderErrorScreen(errorMessage) {
 }
 
 function renderMainLayout() {
-    // Calculate Stats
+
     const activeIssues = maintenanceRecords.filter(r => r.status !== 'Completed' && r.status !== 'Cancelled').length;
     const groundedPlanes = planes.filter(p => p.status === 'maintenance' || p.status === 'out_of_service').length;
     const pendingInspections = maintenanceRecords.filter(r => r.status === 'Pending').length;
 
     const content = document.getElementById("main-content");
-    content.innerHTML = /*html*/`
+    content.innerHTML = `
         <div class="flex flex-col h-full text-white relative animate-fade-in">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -160,18 +160,18 @@ function renderTableRows() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // 1. Filter
+
     let filtered = maintenanceRecords.filter(r => {
         const isActive = r.status === 'Pending' || r.status === 'In Progress';
         return currentFilter === 'active' ? isActive : !isActive;
     });
 
-    // 2. Sort
+
     filtered.sort((a, b) => {
         let valA = a[sortState.column];
         let valB = b[sortState.column];
 
-        // Custom sort logic for derived fields
+
         if (sortState.column === 'plane') {
             valA = getPlaneTail(a.plane_id);
             valB = getPlaneTail(b.plane_id);
@@ -182,7 +182,7 @@ function renderTableRows() {
         return 0;
     });
 
-    // 3. Empty State
+
     if (filtered.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -194,14 +194,14 @@ function renderTableRows() {
         return;
     }
 
-    // 4. Render Rows
+
     filtered.forEach(record => {
         const plane = planes.find(p => p.id === record.plane_id);
         const tail = plane ? plane.tail_number : 'Unknown';
         const date = new Date(record.created_at).toLocaleDateString();
         const statusColor = getStatusColor(record.status);
 
-        // Calculate hours diff if due_hours exists
+
         let hoursDisplay = '-';
         if (record.due_hours && plane) {
             const diff = record.due_hours - plane.hours_flown;
@@ -210,7 +210,7 @@ function renderTableRows() {
         }
 
         const tr = document.createElement('tr');
-        // Added 'cursor-pointer' to indicate it's clickable
+
         tr.className = "hover:bg-gray-800 transition-colors group cursor-pointer border-b border-gray-800 last:border-none";
 
         tr.innerHTML = `
@@ -232,20 +232,20 @@ function renderTableRows() {
             </td>
         `;
 
-        // --- Event Listeners ---
 
-        // 1. Row Click -> Opens Details Page
+
+
         tr.addEventListener('click', (e) => {
-            // If the click originated from the edit button, do nothing (handled below)
+
             if (e.target.closest('.edit-btn')) return;
 
             loadMaintenanceDetailsPage(record.id);
         });
 
-        // 2. Edit Button Click -> Opens Modal (and stops row click)
+
         const editBtn = tr.querySelector('.edit-btn');
         editBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevents the row click event from firing
+            e.stopPropagation();
             openMaintenanceModal(record);
         });
 
@@ -268,7 +268,7 @@ function attachMainEventListeners() {
     tabActive.addEventListener("click", handleTabActive);
     tabHistory.addEventListener("click", handleTabHistory);
 
-    // Sorting Headers
+
     document.querySelectorAll('th[data-sort]').forEach(th => {
         th.addEventListener('click', () => {
             const col = th.dataset.sort;
@@ -292,7 +292,7 @@ function attachMainEventListeners() {
 function switchTab(tab) {
     currentFilter = tab;
 
-    // Update UI Classes
+
     const btnActive = document.getElementById("tab-active");
     const btnHistory = document.getElementById("tab-history");
 
@@ -317,7 +317,7 @@ function openMaintenanceModal(record = null) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in";
 
-    // ... (Your existing option generation code remains the same) ...
+
     const planeOptions = planes.map(p =>
         `<option value="${p.id}" ${record && record.plane_id === p.id ? 'selected' : ''}>${p.tail_number} (${p.status})</option>`
     ).join('');
@@ -382,13 +382,13 @@ function openMaintenanceModal(record = null) {
     document.body.appendChild(modalOverlay);
     activeModal = modalOverlay;
 
-    // --- FIX 1: Safe Close Function ---
+
     const close = () => {
-        // Only remove if it's still connected to the DOM
+
         if (modalOverlay.isConnected) {
             document.body.removeChild(modalOverlay);
         }
-        // Only clear global activeModal if it matches this specific overlay
+
         if (activeModal === modalOverlay) {
             activeModal = null;
         }
@@ -406,8 +406,8 @@ function openMaintenanceModal(record = null) {
         deleteBtn.onclick = async () => {
             if (confirm("Are you sure you want to delete this record?")) {
                 await deleteRecord(record.id);
-                // Note: deleteRecord calls loadMaintenancePage, which cleans up the modal.
-                // We do NOT need to call close() here.
+
+
             }
         };
     }
@@ -444,15 +444,15 @@ function openMaintenanceModal(record = null) {
                 showToast("Ticket created", "success");
             }
 
-            // --- FIX 2: Do not call close() after this ---
-            // loadMaintenancePage() will trigger cleanupMaintenancePage(),
-            // which automatically removes 'activeModal'.
+
+
+
             await loadMaintenancePage();
 
         } catch (err) {
             console.error(err);
             showToast(err.message, "error");
-            // If error, we stay on modal, so we hide spinner
+
             if (activeModal) btnSpinner.classList.add('hidden');
         }
     };
@@ -462,7 +462,7 @@ function openMaintenanceModal(record = null) {
 
 async function deleteRecord(id) {
     try {
-        // FIX: Use RPC call for delete
+
         const { error } = await supabase.schema('api').rpc('delete_maintenance_record', {
             maint_uuid: id
         });
@@ -491,18 +491,18 @@ function getStatusColor(status) {
 }
 
 export function cleanupMaintenancePage() {
-    // 1. Execute all stored cleanup callbacks
+
     cleanupFunctions.forEach(fn => fn());
     cleanupFunctions = [];
 
-    // 2. Clear Modal
+
     if (activeModal) {
         activeModal.remove();
         activeModal = null;
     }
 
-    // 3. Clear Intervals (if any added later)
-    // 4. Clear DOM
+
+
     const content = document.getElementById("main-content");
     if (content) content.innerHTML = "";
 }

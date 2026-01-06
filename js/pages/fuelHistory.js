@@ -98,27 +98,27 @@ async function fetchData() {
         renderStats();
         renderTable(allFuelLogs);
 
-        // --- NEW AUTOCOMPLETE LOGIC START ---
-        // 1. Extract unique aircraft from the logs to create a data source
+
+
         const uniquePlanesMap = new Map();
 
         allFuelLogs.forEach(log => {
             const tail = log.planes?.tail_number;
             if (tail && !uniquePlanesMap.has(tail)) {
                 uniquePlanesMap.set(tail, {
-                    id: tail,       // Use tail as ID for filtering
-                    name: tail,     // Display the tail number
-                    type: null      // Null type ensures no "User" label appears in dropdown
+                    id: tail,
+                    name: tail,
+                    type: null
                 });
             }
         });
 
         const planeDataSource = Array.from(uniquePlanesMap.values());
 
-        // 2. Initialize Autocomplete on the search input
+
         const inputElement = document.getElementById("search-tail");
 
-        // Remove old listeners to prevent duplicates if fetchData is called again
+
         const newElement = inputElement.cloneNode(true);
         inputElement.parentNode.replaceChild(newElement, inputElement);
 
@@ -130,15 +130,15 @@ async function fetchData() {
             additionalFields: [],
             placeholder: 'Search Tail Number...',
             onSelect: (selected) => {
-                // Filter by the selected tail number
+
                 filterData(selected.value, document.getElementById("filter-type").value);
             },
             onInput: (query) => {
-                // Filter as user types (or clears input)
+
                 filterData(query, document.getElementById("filter-type").value);
             }
         });
-        // --- NEW AUTOCOMPLETE LOGIC END ---
+
 
     } catch (err) {
         console.error("Error fetching fuel logs:", err);

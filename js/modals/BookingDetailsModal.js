@@ -8,14 +8,14 @@ export class BookingDetailsModal {
     constructor(config = {}) {
         console.log('🔧 BookingDetailsModal constructor called');
 
-        // Static counter to track instances
+
         if (!BookingDetailsModal.instanceCount) {
             BookingDetailsModal.instanceCount = 0;
         }
         BookingDetailsModal.instanceCount++;
         console.log('🔧 Modal instance count:', BookingDetailsModal.instanceCount);
 
-        // Check if there's already a modal before creating a new one
+
         const existingModals = document.querySelectorAll('#booking-details-modal');
         if (existingModals.length > 0) {
             console.log('🔧 Found existing modals, removing them first');
@@ -39,7 +39,7 @@ export class BookingDetailsModal {
         this.animationDuration = 300;
         this.config = config;
 
-        // Add instance tracking
+
         this.instanceId = Date.now() + Math.random();
         console.log('🔧 Creating modal instance:', this.instanceId);
 
@@ -56,7 +56,7 @@ export class BookingDetailsModal {
         BookingDetailsModal.instanceCount = 0;
     }
 
-    // Update the show method to include a better initial state
+
     show(bookingData) {
 
         const zombieModal = document.getElementById('booking-cancel-modal');
@@ -64,7 +64,7 @@ export class BookingDetailsModal {
             zombieModal.remove();
         }
 
-        // Prevent multiple instances more aggressively
+
         if (this.isOpen) {
             console.log('🔧 Modal already open, ignoring show call');
             return;
@@ -73,18 +73,18 @@ export class BookingDetailsModal {
         this.currentBooking = bookingData;
         this.isOpen = true;
 
-        // Ensure modal is in DOM before proceeding
+
         if (!this.modal || !this.modal.parentNode) {
             console.log('🔧 Modal not in DOM, recreating');
             this.createModal();
         }
 
-        // Show loading state immediately when modal opens
+
         this.showLoadingState();
 
         this.setupEventListeners();
 
-        // Trigger animation after DOM update
+
         requestAnimationFrame(() => {
             if (this.modal && this.modal.parentNode) {
                 this.modal.classList.remove('hidden');
@@ -96,7 +96,7 @@ export class BookingDetailsModal {
                     }
                     console.log('🔧 Modal show animation complete');
 
-                    // Now populate the data after the modal is visible
+
                     this.populateData(bookingData);
                 });
             }
@@ -117,14 +117,14 @@ export class BookingDetailsModal {
         console.log('🔧 Hiding modal');
         this.isOpen = false;
 
-        // Animate out
+
         const modalContent = this.modal.querySelector('.bg-gray-900');
         if (modalContent) {
             modalContent.classList.remove("scale-100", "opacity-100");
             modalContent.classList.add("scale-95", "opacity-0");
         }
 
-        // Remove from DOM after animation
+
         setTimeout(() => {
             this.destroy();
         }, this.animationDuration);
@@ -144,7 +144,7 @@ export class BookingDetailsModal {
         this.relatedData = null;
         this.isOpen = false;
 
-        // Decrement instance count
+
         if (BookingDetailsModal.instanceCount > 0) {
             BookingDetailsModal.instanceCount--;
         }
@@ -174,7 +174,7 @@ export class BookingDetailsModal {
         this.modal.id = 'booking-details-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm';
 
-        // Added Edit and Cancel buttons to the footer
+
         this.modal.innerHTML = `
         <div class="bg-gray-900 p-6 rounded-xl w-full max-w-4xl shadow-lg max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-95 opacity-0 custom-scrollbar">
             <div class="flex justify-between items-center mb-6">
@@ -233,7 +233,7 @@ export class BookingDetailsModal {
 
         if (!closeModalBtn || !closeDetailsBtn) return;
 
-        // Handlers
+
         const closeModalHandler = () => {
             if (this.onClose) this.onClose();
             this.hide();
@@ -256,17 +256,17 @@ export class BookingDetailsModal {
             }
         };
 
-        // Attach events
+
         closeModalBtn.addEventListener('click', closeModalHandler);
         closeDetailsBtn.addEventListener('click', closeModalHandler);
         this.modal.addEventListener('click', modalClickHandler);
         document.addEventListener('keydown', keydownHandler);
 
-        // New buttons
+
         if (editBtn) editBtn.addEventListener('click', editHandler);
         if (cancelBtn) cancelBtn.addEventListener('click', cancelHandler);
 
-        // Store for cleanup
+
         this.eventListeners = [
             { element: closeModalBtn, event: 'click', handler: closeModalHandler },
             { element: closeDetailsBtn, event: 'click', handler: closeModalHandler },
@@ -291,7 +291,7 @@ export class BookingDetailsModal {
             </div>
         `;
 
-            // Add retry functionality
+
             const retryBtn = document.getElementById('retry-loading');
             if (retryBtn && this.currentBooking) {
                 retryBtn.addEventListener('click', () => {
@@ -331,15 +331,15 @@ export class BookingDetailsModal {
 
     async populateData(bookingData) {
         try {
-            // Show initial loading state
+
             this.updateLoadingProgress(0, "Starting to load booking details...");
 
-            // Check if we already have pre-loaded data
+
             if (bookingData.plane && (bookingData.students || bookingData.pilot)) {
                 console.log('🔧 Using pre-loaded data');
                 this.updateLoadingProgress(50, "Processing pre-loaded data...");
 
-                // Simulate progress for pre-loaded data
+
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 this.relatedData = {
@@ -355,11 +355,11 @@ export class BookingDetailsModal {
                 await new Promise(resolve => setTimeout(resolve, 300));
 
             } else {
-                // Load data the standard way
+
                 await this.loadRelatedData(bookingData);
             }
 
-            // Smooth transition to content
+
             const content = document.getElementById('booking-details-content');
             if (content) {
                 content.style.opacity = '0.7';
@@ -378,7 +378,7 @@ export class BookingDetailsModal {
                 }
             }
 
-            // Hide loading state
+
             this.hideLoadingState();
 
         } catch (error) {
@@ -398,7 +398,7 @@ export class BookingDetailsModal {
     async fetchUserProfile(userUuid) {
         if (!userUuid) return null;
 
-        // 1. Get User Metadata (Role & Person ID) using the API schema
+
         const { data: userData, error: userError } = await supabase
             .schema('api')
             .rpc('get_user_by_id', { user_uuid: userUuid });
@@ -410,8 +410,8 @@ export class BookingDetailsModal {
 
         const userMeta = userData[0];
 
-        // 2. Select appropriate RPC based on role
-        // FIXED: Removed 'api.' prefix from all function names
+
+
         let rpcName = '';
         let paramName = '';
         let type = userMeta.role;
@@ -434,15 +434,15 @@ export class BookingDetailsModal {
                 paramName = 'technician_uuid';
                 break;
             default:
-                // Fallback for 'other_person' or undefined roles
+
                 return {
                     name: 'Unknown User',
                     type: userMeta.role
                 };
         }
 
-        // 3. Call RPC using .schema('api')
-        // FIXED: Added .schema('api') here
+
+
         const { data: profileData, error: profileError } = await supabase
             .schema('api')
             .rpc(rpcName, {
@@ -456,7 +456,7 @@ export class BookingDetailsModal {
 
         const profile = profileData[0];
 
-        // 4. Normalize data for UI
+
         return {
             ...profile,
             name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim(),
@@ -468,15 +468,15 @@ export class BookingDetailsModal {
         try {
             console.log('🔧 Starting to load related data for booking:', bookingData.id);
 
-            // Initialize progress tracking
+
             let progress = 0;
-            const totalSteps = 4; // plane, pilot, instructor, students
+            const totalSteps = 4;
             const updateProgress = (step) => {
                 progress = Math.min(100, (step / totalSteps) * 100);
                 this.updateLoadingProgress(progress, this.getProgressMessage(step));
             };
 
-            // Step 1: Load plane data via RPC
+
             updateProgress(1);
             console.log('🔧 Loading plane data...');
             const { data: planeData, error: planeError } = await supabase
@@ -489,7 +489,7 @@ export class BookingDetailsModal {
 
             const plane = planeData && planeData.length > 0 ? planeData[0] : null;
 
-            // FIX: Fetch Plane Model Name
+
             if (plane && plane.model_id) {
                 const { data: modelData, error: modelError } = await supabase
                     .schema('api').rpc('get_plane_model_by_id', { model_uuid: plane.model_id });
@@ -505,26 +505,26 @@ export class BookingDetailsModal {
                 console.warn('⚠️ No plane found for ID:', bookingData.plane_id);
             }
 
-            // Step 2: Load instructor data if present
+
             updateProgress(2);
             let instructorData = null;
             if (bookingData.instructor_id) {
                 console.log('🔧 Loading instructor data...');
-                // Use helper to resolve User -> Instructor Profile
+
                 instructorData = await this.fetchUserProfile(bookingData.instructor_id);
             }
 
-            // Step 3: Load pilot data
+
             updateProgress(3);
             console.log('🔧 Loading pilot data...');
             let pilotData = null;
             if (bookingData.pilot_id) {
-                // Use helper to resolve User -> Profile (handles Student vs Instructor vs Pilot roles)
+
                 pilotData = await this.fetchUserProfile(bookingData.pilot_id);
                 console.log('🔧 Pilot loaded:', pilotData ? pilotData.name : 'None');
             }
 
-            // Step 4: Load additional students for instruction flights
+
             updateProgress(4);
             console.log('🔧 Loading student data...');
             let studentsData = [];
@@ -532,13 +532,13 @@ export class BookingDetailsModal {
             if (bookingData.booking_type === 'instruction') {
                 console.log('🔧 Loading instruction flight students...');
 
-                // For instruction flights, include the pilot if they are a student
+
                 if (pilotData && pilotData.type === 'student') {
                     studentsData.push(pilotData);
                 }
 
-                // Load additional students (student2_id, student3_id)
-                // Note: These are now User UUIDs in the new schema
+
+
                 const additionalStudentIds = [
                     bookingData.student2_id,
                     bookingData.student3_id
@@ -553,14 +553,14 @@ export class BookingDetailsModal {
                     }
                 }
             } else if (bookingData.booking_type === 'regular' && pilotData) {
-                // For regular flights, include the pilot regardless of type
+
                 studentsData.push(pilotData);
             }
 
-            // Final progress update
+
             this.updateLoadingProgress(100, "Finalizing booking details...");
 
-            // Compile all related data
+
             this.relatedData = {
                 plane: plane,
                 instructor: instructorData,
@@ -581,7 +581,7 @@ export class BookingDetailsModal {
         } catch (error) {
             console.error('❌ Critical error in loadRelatedData:', error);
 
-            // Set fallback data structure
+
             this.relatedData = {
                 plane: null,
                 instructor: null,
@@ -591,11 +591,11 @@ export class BookingDetailsModal {
                 bookingType: bookingData.booking_type
             };
 
-            throw error; // Re-throw to be caught by populateData
+            throw error;
         }
     }
 
-    // Add helper methods for progress tracking
+
     getProgressMessage(step) {
         const messages = {
             1: "Loading aircraft information...",
@@ -652,7 +652,7 @@ export class BookingDetailsModal {
 
         const startTime = new Date(bookingData.start_time);
         const endTime = new Date(bookingData.end_time);
-        const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+        const duration = (endTime - startTime) / (1000 * 60 * 60);
 
         return `
     <div class="space-y-6">
@@ -730,7 +730,7 @@ export class BookingDetailsModal {
             <div class="overflow-x-auto pb-4">
                 <div class="flex space-x-4 min-w-max">
                     ${students.map((person) => {
-            // Define badge styles based on person type
+
             let badgeText = 'Student Pilot';
             let badgeColor = 'bg-blue-600';
 
@@ -748,7 +748,7 @@ export class BookingDetailsModal {
                     badgeColor = 'bg-orange-600';
                     break;
                 default:
-                    // Check for CFI in license as fallback for legacy data
+
                     if (person.license_number?.includes('CFI')) {
                         badgeText = 'Instructor Pilot';
                         badgeColor = 'bg-purple-600';
@@ -923,18 +923,18 @@ export class BookingDetailsModal {
     handleEdit() {
         if (!this.currentBooking) return;
 
-        // FIX: Capture the booking data locally before 'hide()' destroys it
+
         const bookingToRestore = this.currentBooking;
 
         this.hide();
 
         const editModal = new EditBookingModal({
-            booking: bookingToRestore, // Use local variable
+            booking: bookingToRestore,
             planes: this.planes,
             students: this.students,
             instructors: this.instructors,
             onClose: () => {
-                // FIX: Use 'bookingToRestore' because 'this.currentBooking' is now null
+
                 this.show(bookingToRestore);
             }
         });
@@ -945,20 +945,20 @@ export class BookingDetailsModal {
     handleCancel() {
         if (!this.currentBooking) return;
 
-        // FIX: Capture the booking data locally before 'hide()' destroys it
+
         const bookingToRestore = this.currentBooking;
 
-        // Hide this modal
+
         this.hide();
 
         const cancelModal = new BookingCancelModal({
-            booking: bookingToRestore, // Use local variable
+            booking: bookingToRestore,
             onConfirm: () => {
-                // Logic handled by CancelModal
+
                 console.log('Booking cancelled via Details Modal');
             },
             onCancel: () => {
-                // FIX: Use 'bookingToRestore' because 'this.currentBooking' is now null
+
                 this.show(bookingToRestore);
             }
         });

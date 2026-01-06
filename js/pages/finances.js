@@ -9,11 +9,11 @@ import { CreatePayableModal } from "../modals/CreatePayableModal.js";
 import { AddRateModal } from "../modals/AddRateModal.js";
 import { SettleDebtModal } from "../modals/SettleDebtModal.js";
 
-let currentView = 'overview'; // overview, receivable, payable, transactions, rates
+let currentView = 'overview';
 let planesData = [];
-let planeModelsData = []; // New: needed for mapping model names
+let planeModelsData = [];
 let billingRates = [];
-let membersData = []; // New: needed for autocomplete
+let membersData = [];
 
 // Combined ledger data (source of truth for receivable/payable/transactions)
 let fullLedgerData = [];
@@ -93,7 +93,7 @@ export async function loadFinancePage() {
 
 async function loadFinanceData() {
     try {
-        // 1. Fetch Core Data using RPCs and Views
+
         const [
             ledgerResponse,
             ratesResponse,
@@ -101,15 +101,15 @@ async function loadFinanceData() {
             modelsResponse,
             membersResponse
         ] = await Promise.all([
-            // Use the Smart View for the ledger (joins users, flights, transactions)
+
             supabase.schema('api').rpc('get_financial_ledger'),
-            // Use API getter for rates
+
             supabase.schema('api').rpc('get_billing_rates'),
-            // Use API getter for planes
+
             supabase.schema('api').rpc('get_planes'),
-            // Get models to map ID to Name
+
             supabase.schema('api').rpc('get_plane_models'),
-            // Get members for autocomplete
+
             supabase.schema('api').rpc('get_members')
         ]);
 
@@ -117,14 +117,14 @@ async function loadFinanceData() {
         if (ratesResponse.error) throw ratesResponse.error;
         if (membersResponse.error) throw membersResponse.error;
 
-        // 2. Process Data
+
         fullLedgerData = (ledgerResponse.data || []).sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
         );
         billingRates = ratesResponse.data || [];
         membersData = membersResponse.data || [];
 
-        // 3. Process Planes & Models (Mapping model_id to model_name for UI compatibility)
+
         const rawPlanes = planesResponse.data || [];
         planeModelsData = modelsResponse.data || [];
 
@@ -136,7 +136,7 @@ async function loadFinanceData() {
             };
         });
 
-        // 4. Derive View-Specific Arrays
+
         receivableData = fullLedgerData.filter(t => t.transaction_direction === 'receivable');
         payableData = fullLedgerData.filter(t => t.transaction_direction === 'payable');
         transactionsData = fullLedgerData;
@@ -156,7 +156,7 @@ async function loadFinanceData() {
 }
 
 function setupEventListeners() {
-    // Tab navigation
+
     document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', (e) => {
             currentView = e.target.getAttribute('data-view');
@@ -164,7 +164,7 @@ function setupEventListeners() {
         });
     });
 
-    // Refresh button
+
     document.getElementById('refresh-finance').addEventListener('click', async () => {
         await loadFinanceData();
         renderCurrentView();
@@ -176,7 +176,7 @@ function showAddRateModal(preSelectedAircraftId = null, preSelectedType = null, 
         addRateModal = new AddRateModal();
     }
 
-    // Pass the rateToEdit to the modal
+
     addRateModal.show(async () => {
         await loadFinanceData();
         renderCurrentView();
@@ -188,7 +188,7 @@ function showAddRateModal(preSelectedAircraftId = null, preSelectedType = null, 
 function renderCurrentView() {
     const content = document.getElementById('finance-content');
 
-    // Update tab highlighting
+
     document.querySelectorAll('.tab-button').forEach(button => {
         const view = button.getAttribute('data-view');
         if (view === currentView) {
@@ -228,7 +228,7 @@ function renderOverview(container) {
         .filter(p => p.status === 'pending')
         .reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
-    // Loose month calculation based on created_at
+
     const monthlyRevenue = transactionsData
         .filter(t => t.transaction_direction === 'receivable' && t.status === 'paid' && isThisMonth(new Date(t.created_at)))
         .reduce((sum, t) => sum + parseFloat(t.amount), 0);
@@ -402,7 +402,7 @@ function renderReceivableView(container) {
         </div>
     `;
 
-    // Initialize Autocomplete for Filtering
+
     setupPersonAutocomplete({
         inputId: 'receivable-search',
         hiddenId: 'receivable-search-id',
@@ -411,7 +411,7 @@ function renderReceivableView(container) {
         onSelect: () => filterReceivableTable(activeReceivableFilter)
     });
 
-    // Handle clearing the search input (onInput empty checks)
+
     document.getElementById('receivable-search').addEventListener('input', (e) => {
         if (!e.target.value.trim()) {
             document.getElementById('receivable-search-id').value = '';
@@ -419,12 +419,12 @@ function renderReceivableView(container) {
         }
     });
 
-    // Add event listeners for receivable tabs
+
     document.querySelectorAll('.tab-receivable').forEach(btn => {
         btn.addEventListener('click', (e) => {
             activeReceivableFilter = e.target.getAttribute('data-filter');
 
-            // Update active tab styling
+
             document.querySelectorAll('.tab-receivable').forEach(b => {
                 b.classList.remove('bg-blue-600');
                 b.classList.add('bg-gray-700');
@@ -440,7 +440,7 @@ function renderReceivableView(container) {
     document.getElementById('settle-account-btn').addEventListener('click', showSettleDebtModal);
 
     setupPaymentButtons();
-    // Apply initial filter state (e.g. if returning from another tab)
+
     filterReceivableTable(activeReceivableFilter);
 }
 
@@ -526,7 +526,7 @@ function renderPayableView(container) {
         </div>
     `;
 
-    // Initialize Autocomplete
+
     setupPersonAutocomplete({
         inputId: 'payable-search',
         hiddenId: 'payable-search-id',
@@ -542,12 +542,12 @@ function renderPayableView(container) {
         }
     });
 
-    // Add event listeners for payable tabs
+
     document.querySelectorAll('.tab-payable').forEach(btn => {
         btn.addEventListener('click', (e) => {
             activePayableFilter = e.target.getAttribute('data-filter');
 
-            // Update active tab styling
+
             document.querySelectorAll('.tab-payable').forEach(b => {
                 b.classList.remove('bg-blue-600');
                 b.classList.add('bg-gray-700');
@@ -568,10 +568,10 @@ function renderPayableView(container) {
 function showSettleDebtModal() {
     if (!settleDebtModal) {
         settleDebtModal = new SettleDebtModal();
-        settleDebtModal.init(); // Important: call init() to fetch the member list
+        settleDebtModal.init();
     }
 
-    // Show the modal and pass a callback to refresh data when done
+
     settleDebtModal.show(async () => {
         await loadFinanceData();
         renderCurrentView();
@@ -588,7 +588,7 @@ function showCreatePayableModal() {
     createPayableModal.show();
     activeModal = createPayableModal;
 
-    // Listen for the custom event dispatched by the modal on success
+
     const handlePayableCreated = () => {
         loadFinanceData().then(() => {
             renderCurrentView();
@@ -654,7 +654,7 @@ function renderTransactionsView(container) {
         </div>
     `;
 
-    // Initialize Autocomplete
+
     setupPersonAutocomplete({
         inputId: 'transaction-search',
         hiddenId: 'transaction-search-id',
@@ -670,7 +670,7 @@ function renderTransactionsView(container) {
         }
     });
 
-    // Add click listeners to transaction rows
+
     setupTransactionClickListeners();
 }
 
@@ -708,7 +708,7 @@ function setupTransactionClickListeners() {
 }
 
 function showTransactionDetailsModal(transactionData) {
-    closeActiveModal(); // Close any other modals first
+    closeActiveModal();
 
     if (!transactionModal) {
         transactionModal = new TransactionDetailsModal();
@@ -742,16 +742,16 @@ function showRecordPaymentModal(paymentId, paymentType, amount) {
 
     const paymentData = {
         id: paymentId,
-        type: paymentType, // 'receivable' or 'payable'
+        type: paymentType,
         amount: amount,
         date: new Date().toISOString().split('T')[0]
     };
 
     modal.show(paymentData, async () => {
-        // Callback when payment is recorded successfully
-        // The modal logic handles the DB update, but it might be using old code.
-        // If PaymentModal is external, we assume it triggers the callback after attempt.
-        // We will force a refresh here.
+
+
+
+
         await loadFinanceData();
         renderCurrentView();
     });
@@ -842,7 +842,7 @@ function renderRatesView(container) {
                         </div>
                         
                         <div class="space-y-4">
-                            ${/* STUDENT RATE CARD */ ''}
+                            ${''}
                             <div class="bg-gray-750 p-4 rounded-lg">
                                 <div class="flex justify-between items-center mb-2">
                                     <span class="font-semibold text-gray-300">Student Rate</span>
@@ -866,7 +866,7 @@ function renderRatesView(container) {
                                 </div>
                             </div>
 
-                            ${/* INSTRUCTOR RATE CARD */ ''}
+                            ${''}
                             <div class="bg-gray-750 p-4 rounded-lg">
                                 <div class="flex justify-between items-center mb-2">
                                     <span class="font-semibold text-gray-300">Instructor Rate</span>
@@ -890,7 +890,7 @@ function renderRatesView(container) {
                                 </div>
                             </div>
 
-                            ${/* STANDARD RATE CARD */ ''}
+                            ${''}
                             <div class="bg-gray-750 p-4 rounded-lg">
                                 <div class="flex justify-between items-center mb-2">
                                     <span class="font-semibold text-gray-300">Standard Rate</span>
@@ -916,7 +916,7 @@ function renderRatesView(container) {
 
                         </div> 
 
-                        ${/* OTHER RATES LIST */ ''}
+                        ${''}
                         ${aircraftRates[model].rates.filter(rate => !['student_hourly', 'instructor_hourly', 'standard_hourly'].includes(rate.rate_type)).length > 0 ? `
                             <div class="mt-4 pt-4 border-t border-gray-700">
                                 <h4 class="font-semibold text-gray-400 mb-2">Additional Rates</h4>
@@ -949,18 +949,18 @@ function renderRatesView(container) {
         `}
         `;
 
-    // 1. "Add Rate" (Global button)
+
     document.getElementById('add-rate-btn')?.addEventListener('click', () => {
         showAddRateModal();
     });
 
-    // 2. "Add Rate" (Specific Cards)
+
     document.querySelectorAll('.add-student-rate, .add-standard-rate, .add-instructor-rate').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const modelName = e.target.getAttribute('data-aircraft-model');
             const rateType = e.target.getAttribute('data-rate-type');
 
-            // Resolve Model Name to ID for the modal
+
             const modelObj = planeModelsData.find(m => m.model_name === modelName);
             const modelId = modelObj ? modelObj.id : null;
 
@@ -968,20 +968,20 @@ function renderRatesView(container) {
         });
     });
 
-    // 3. "Edit Rate" buttons (Updated to use new modal)
+
     document.querySelectorAll('.edit-rate-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const rateId = e.target.getAttribute('data-rate-id');
             const rate = billingRates.find(r => r.id === rateId);
 
             if (rate) {
-                // Pass null for preselections, but pass the rate object as the 4th argument
+
                 showAddRateModal(null, null, rate);
             }
         });
     });
 
-    // 4. "Delete Rate" buttons (Keep existing logic)
+
     document.querySelectorAll('.delete-rate-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const rateId = e.target.getAttribute('data-rate-id');
@@ -993,13 +993,13 @@ function renderRatesView(container) {
 function closeActiveModal() {
     console.log('❌ closeActiveModal called, activeModal:', activeModal);
 
-    // Prevent multiple calls
+
     if (window.isClosingModal) return;
     window.isClosingModal = true;
 
-    // Close the active modal instance
+
     if (activeModal) {
-        // Store reference and clear immediately to prevent recursion
+
         const modalToClose = activeModal;
         activeModal = null;
 
@@ -1012,13 +1012,13 @@ function closeActiveModal() {
         }
     }
 
-    // Clear any pending timeouts
+
     if (modalCleanupTimeout) {
         clearTimeout(modalCleanupTimeout);
         modalCleanupTimeout = null;
     }
 
-    // Reset the flag after a short delay
+
     setTimeout(() => {
         window.isClosingModal = false;
     }, 100);
@@ -1027,26 +1027,26 @@ function closeActiveModal() {
 export async function cleanupFinancePage() {
     console.log('Cleaning up finance page...');
 
-    // Clean up active modal if exists
+
     if (activeModal) {
         closeActiveModal();
     }
 
-    // Clean up transaction modal
+
     if (transactionModal) {
         transactionModal.hide();
         transactionModal = null;
     }
 
     if (settleDebtModal) {
-        // Remove from DOM if needed or just hide
+
         if (typeof settleDebtModal.hide === 'function') settleDebtModal.hide();
         settleDebtModal = null;
     }
 
-    // Clean up create invoice modal
+
     if (createInvoiceModal) {
-        createInvoiceModal.destroy(); // Assuming destroy method exists
+        createInvoiceModal.destroy();
         createInvoiceModal = null;
     }
 
@@ -1056,23 +1056,23 @@ export async function cleanupFinancePage() {
     }
 
     if (addRateModal) {
-        addRateModal.hide(); // Or destroy if method exists
+        addRateModal.hide();
         addRateModal = null;
     }
 
-    // Clean up any remaining modal timeouts
+
     if (modalCleanupTimeout) {
         clearTimeout(modalCleanupTimeout);
         modalCleanupTimeout = null;
     }
 
-    // Remove event listeners from main content
+
     const mainContent = document.getElementById("main-content");
     if (mainContent) {
         mainContent.innerHTML = "";
     }
 
-    // Remove global event listeners
+
     window.removeEventListener('beforeunload', cleanupFinancePage);
 }
 
@@ -1101,7 +1101,7 @@ function filterReceivableTable(statusFilter) {
     const rows = document.querySelectorAll('#receivable-table-body tr');
 
     rows.forEach(row => {
-        // 1. Check Status
+
         const statusCell = row.querySelector('td:nth-child(5) span');
         let statusMatch = true;
         if (statusCell) {
@@ -1113,11 +1113,11 @@ function filterReceivableTable(statusFilter) {
             }
         }
 
-        // 2. Check User ID
+
         const rowUserId = row.getAttribute('data-user-id');
         const userMatch = !selectedUserId || rowUserId === selectedUserId;
 
-        // Apply
+
         if (statusMatch && userMatch) {
             row.style.display = '';
         } else {
@@ -1134,7 +1134,7 @@ function filterPayableTable(statusFilter) {
     const rows = document.querySelectorAll('#payable-table-body tr');
 
     rows.forEach(row => {
-        // 1. Check Status
+
         const statusCell = row.querySelector('td:nth-child(6) span');
         let statusMatch = true;
         if (statusCell) {
@@ -1146,11 +1146,11 @@ function filterPayableTable(statusFilter) {
             }
         }
 
-        // 2. Check User ID
+
         const rowUserId = row.getAttribute('data-user-id');
         const userMatch = !selectedUserId || rowUserId === selectedUserId;
 
-        // Apply
+
         if (statusMatch && userMatch) {
             row.style.display = '';
         } else {

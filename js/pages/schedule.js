@@ -233,7 +233,7 @@ export async function loadSchedulePage() {
 function setupToggleEvents() {
     const toggle = document.getElementById('show-all-toggle');
     if (toggle) {
-        // Set initial state to unchecked (off)
+
         toggle.checked = false;
         showAllBookings = false;
 
@@ -250,8 +250,8 @@ function setupToggleEvents() {
 
 async function fetchData() {
     try {
-        // SURGICAL REFACTOR: Fetch from API RPCs and Views
-        // We need users to map Auth IDs to Person IDs for the legacy logic
+
+
         const [planesResponse, bookingsResponse, usersResponse, membersResponse] = await Promise.all([
             supabase.schema('api').rpc('get_planes'),
             supabase.schema('api').rpc('get_bookings'),
@@ -270,16 +270,16 @@ async function fetchData() {
         const allUsers = usersResponse.data || [];
         const allMembers = membersResponse.data || [];
 
-        // DATA WIRING: Map View Data to Legacy Structure
-        // The UI logic expects `students` array where .id matches booking.pilot_id
-        // In the new schema, booking.pilot_id is a User UUID, but.id is a Person UUID.
-        // We create a "Hydrated User" object: Properties from View, ID from User Table.
+
+
+
+
 
         students = allUsers
             .filter(u => u.role === 'student' || u.role === 'regular_pilot' || u.role === 'other_person')
             .map(u => {
                 const details = allMembers.find(m => m.id === u.person_id);
-                // Return object with View details but User UUID as the ID to satisfy legacy UI lookups
+
                 return details ? { ...details, id: u.id, person_id: u.person_id } : null;
             })
             .filter(Boolean);
@@ -299,7 +299,7 @@ async function fetchData() {
 }
 
 function setupTableViewEvents() {
-    // View toggle buttons
+
     document.getElementById("schedule-view-btn").addEventListener("click", () => {
         tableView = false;
         document.getElementById("schedule-view").classList.remove("hidden");
@@ -321,7 +321,7 @@ function setupTableViewEvents() {
         renderTableView();
     });
 
-    // Table sorting
+
     document.querySelectorAll("#table-view th[data-column]").forEach(th => {
         th.addEventListener("click", () => {
             const column = th.getAttribute("data-column");
@@ -329,7 +329,7 @@ function setupTableViewEvents() {
         });
     });
 
-    // Table search
+
     document.getElementById("search-box").addEventListener("input", e => {
         searchState.query = e.target.value.toLowerCase();
         currentPage = 1;
@@ -342,7 +342,7 @@ function setupTableViewEvents() {
         renderTableView();
     });
 
-    // Time filter
+
     document.getElementById("time-filter").addEventListener("change", () => {
         currentPage = 1;
         renderTableView();
@@ -350,21 +350,21 @@ function setupTableViewEvents() {
 }
 
 function renderTableView() {
-    // --- DEMO MODE: PERMISSIONS FLAG ---
-    const isDemoAdmin = true;
-    // -----------------------------------
 
-    // Process bookings for table display
+    const isDemoAdmin = true;
+
+
+
     const timeFilter = document.getElementById("time-filter").value;
     const now = new Date();
 
     let tableData = bookings.map(booking => {
         const plane = planes.find(p => p.id === booking.plane_id);
-        // Note: instructors/students arrays now contain User UUIDs as .id, 
-        // so this finding logic works with the raw booking data (which has User UUIDs).
+
+
         const instructor = instructors.find(i => i.id === booking.instructor_id);
 
-        // Get pilot name (primary student/pilot) - handle both students and instructors
+
         let pilotName = '';
         if (booking.pilot_id) {
             const studentPilot = students.find(s => s.id === booking.pilot_id);
@@ -380,7 +380,7 @@ function renderTableView() {
 
         const startTime = new Date(booking.start_time);
         const endTime = new Date(booking.end_time);
-        const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+        const duration = (endTime - startTime) / (1000 * 60 * 60);
 
         return {
             ...booking,
@@ -394,32 +394,32 @@ function renderTableView() {
         };
     });
 
-    // Apply showAllBookings filter first
+
     if (!showAllBookings) {
         tableData = tableData.filter(booking => booking.start_datetime > now);
     }
 
-    // Apply time filter
+
     if (timeFilter === 'future') {
         tableData = tableData.filter(booking => booking.start_datetime > now);
     } else if (timeFilter === 'past') {
         tableData = tableData.filter(booking => booking.start_datetime <= now);
     }
 
-    // Filter by search
+
     let filteredData = tableData.filter(booking => {
         if (!searchState.query) return true;
         const value = (booking[searchState.column] || "").toString().toLowerCase();
         return value.includes(searchState.query);
     });
 
-    // Sort data
+
     if (sortState.direction !== "none") {
         filteredData.sort((a, b) => {
             let aVal = a[sortState.column];
             let bVal = b[sortState.column];
 
-            // Handle date sorting
+
             if (sortState.column === 'start_time') {
                 aVal = new Date(a.start_time).getTime();
                 bVal = new Date(b.start_time).getTime();
@@ -431,13 +431,13 @@ function renderTableView() {
         });
     }
 
-    // Pagination calculations
+
     const totalPages = Math.ceil(filteredData.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
-    // Render table
+
     const tbody = document.getElementById("bookings-table");
     tbody.innerHTML = pageData.map((booking, index) => `
     <tr class="${index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700'} hover:bg-gray-600 cursor-pointer" data-booking-id="${booking.id}">
@@ -459,7 +459,7 @@ function renderTableView() {
     </tr>
 `).join('');
 
-    // Add event listeners for actions
+
     tbody.querySelectorAll('.edit-booking').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -476,7 +476,7 @@ function renderTableView() {
         });
     });
 
-    // Row click handler
+
     tbody.addEventListener('click', (e) => {
         const row = e.target.closest('tr[data-booking-id]');
         if (row && !e.target.closest('.edit-booking') && !e.target.closest('.delete-booking')) {
@@ -558,11 +558,11 @@ async function deleteBooking(bookingId) {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
-    // Get additional booking details for the modal
+
     const plane = planes.find(p => p.id === booking.plane_id);
     const instructor = instructors.find(i => i.id === booking.instructor_id);
 
-    // Get pilot name
+
     let pilotName = '';
     if (booking.pilot_id) {
         const studentPilot = students.find(s => s.id === booking.pilot_id);
@@ -588,7 +588,7 @@ async function deleteBooking(bookingId) {
     const modal = new BookingCancelModal({
         booking: bookingWithDetails,
         onConfirm: async (bookingToDelete) => {
-            // SURGICAL REFACTOR: Use RPC for delete
+
             const { error } = await supabase.schema('api').rpc('delete_booking', {
                 booking_uuid: bookingToDelete.id
             });
@@ -640,14 +640,14 @@ function setupSearchFunctionality() {
 
         let suggestions = [];
 
-        // Search planes
+
         planes.forEach(p => {
             if (p.tail_number && p.tail_number.toLowerCase().includes(query)) {
                 suggestions.push({ type: "Plane", label: p.tail_number });
             }
         });
 
-        // Search students
+
         students.forEach(s => {
             const fullName = `${s.first_name} ${s.last_name}`;
             if (fullName.toLowerCase().includes(query)) {
@@ -655,7 +655,7 @@ function setupSearchFunctionality() {
             }
         });
 
-        // Search instructors
+
         instructors.forEach(i => {
             const fullName = `${i.first_name} ${i.last_name}`;
             if (fullName.toLowerCase().includes(query)) {
@@ -674,7 +674,7 @@ function setupSearchFunctionality() {
         }
     });
 
-    // Close suggestions when clicking outside
+
     document.addEventListener("click", (e) => {
         if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
             suggestionsBox.classList.add("hidden");
@@ -692,10 +692,10 @@ function formatDateForInput(date) {
 function parseDateFromInput(dateString) {
     if (!dateString) return null;
 
-    // Split the YYYY-MM-DD format and create date in local timezone
+
     const [year, month, day] = dateString.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    date.setHours(0, 0, 0, 0); // Normalize to start of day
+    date.setHours(0, 0, 0, 0);
     return date;
 }
 
@@ -712,22 +712,22 @@ function setupDateNavigation() {
         renderSchedule();
     });
 
-    // Initialize the date picker on the input and set today's date
+
     const dateInput = document.getElementById("current-date");
 
-    // Set today's date as the initial value
+
     updateDateInputValue();
 
-    // Store the picker instance globally so we can access it later
+
     datePickerInstance = new CustomDatePicker(dateInput);
 
-    // Handle date changes from the picker
+
     const originalSelectDate = datePickerInstance.selectDate?.bind(datePickerInstance);
     if (originalSelectDate) {
         datePickerInstance.selectDate = (dateString) => {
             originalSelectDate(dateString);
 
-            // Parse the selected date
+
             const selectedDate = parseDateFromInput(dateString);
             if (!isNaN(selectedDate.getTime())) {
                 currentDate = selectedDate;
@@ -743,7 +743,7 @@ function updateDateInputValue() {
         const dateString = formatDateForInput(currentDate);
         dateInput.value = dateString;
 
-        // Also update the custom date picker if it exists
+
         if (datePickerInstance) {
             datePickerInstance.setValue(dateString);
         }
@@ -767,9 +767,9 @@ function setupPagination() {
 }
 
 function renderSchedule() {
-    // --- DEMO MODE: PERMISSIONS FLAG ---
+
     const isDemoAdmin = true;
-    // -----------------------------------
+
 
     const scheduleContainer = document.getElementById("schedule-container");
     if (!scheduleContainer) return;
@@ -790,7 +790,7 @@ function renderSchedule() {
         titleEl.textContent = "General Schedule –";
     }
 
-    // Update the date input value and custom date picker
+
     updateDateInputValue();
 }
 
@@ -831,7 +831,7 @@ function renderDailySchedule(container) {
         new Date(b.start_time) >= dayStart && new Date(b.start_time) <= dayEnd
     );
 
-    // Apply showAllBookings filter
+
     if (!showAllBookings) {
         const now = new Date();
         dailyBookings = dailyBookings.filter(b => new Date(b.start_time) > now);
@@ -839,7 +839,7 @@ function renderDailySchedule(container) {
 
     dailyBookings.forEach(b => placeBookingBox(b));
 
-    // Improved current time indicator
+
     renderCurrentTimeIndicator(container);
 }
 
@@ -848,7 +848,7 @@ function renderCurrentTimeIndicator(container) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Check if we're viewing today (using local date for comparison)
+
     const viewingDate = new Date(currentDate);
     viewingDate.setHours(0, 0, 0, 0);
 
@@ -878,7 +878,7 @@ function renderCurrentTimeIndicator(container) {
                     pointer-events: none;
                 `;
 
-                // Add a circle at the top
+
                 const circle = document.createElement('div');
                 circle.style.cssText = `
                     position: absolute;
@@ -953,13 +953,13 @@ function renderWeeklySchedule(container) {
         return startTime >= weekStartTime && startTime <= weekEndTime;
     });
 
-    // Apply showAllBookings filter
+
     if (!showAllBookings) {
         const now = new Date();
         weeklyBookings = weeklyBookings.filter(b => new Date(b.start_time) > now);
     }
 
-    // Filter by search criteria
+
     if (currentSearchType === "Plane") {
         weeklyBookings = weeklyBookings.filter(b => {
             const plane = planes.find(p => p.id === b.plane_id);
@@ -1027,7 +1027,7 @@ function placeBookingBox(booking, isWeekly = false) {
 
     const targetRow = rows[displayPlaneIndex];
     const cells = targetRow.querySelectorAll("td");
-    const targetCell = cells[columnIndex + 1]; // +1 for plane name column
+    const targetCell = cells[columnIndex + 1];
 
     if (!targetCell) return;
 
@@ -1087,15 +1087,15 @@ function attachScheduleEvents() {
 function createBooking() {
     closeActiveModal();
 
-    // Use our re-mapped 'students' and 'instructors' arrays which contain valid User UUIDs as IDs
+
     const modal = new AddBookingModal({
         planes,
         students,
         instructors,
         onSave: async (newBooking) => {
-            // SURGICAL REFACTOR: Use RPC
-            // newBooking object likely has pilot_id set to the value of selected option from the modal
-            // Our students array has ID = User UUID, so pilot_id will be correct.
+
+
+
             const { data, error } = await supabase.schema('api').rpc('insert_booking', {
                 payload: newBooking
             });
@@ -1130,7 +1130,7 @@ function editBooking(bookingId) {
         students,
         instructors,
         onSave: async (updatedBooking) => {
-            // SURGICAL REFACTOR: Use RPC
+
             const { error } = await supabase.schema('api').rpc('update_booking', {
                 booking_uuid: booking.id,
                 payload: updatedBooking
@@ -1186,19 +1186,19 @@ function closeActiveModal() {
 export async function cleanupSchedulePage() {
     console.log('Cleaning up schedule page...');
 
-    // Clear any modal cleanup timeouts
+
     if (modalCleanupTimeout) {
         clearTimeout(modalCleanupTimeout);
         modalCleanupTimeout = null;
     }
 
-    // Remove global event listeners
+
     window.removeEventListener('beforeunload', cleanupSchedulePage);
 
-    // Close active modal
+
     closeActiveModal();
 
-    // Clear global variables
+
     currentDate = new Date();
     searchQuery = "";
     bookings = [];

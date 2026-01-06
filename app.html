@@ -9,7 +9,7 @@
         } = await supabase.auth.getSession();
 
         if (!session) {
-            // No user → go back to login
+
             window.location.href = "login.html";
         } else {
             console.log("User:", session.user);
@@ -84,12 +84,12 @@
     <script type="module" src="./js/main.js"></script>
 
     <script>
-        // Global error handler to catch any uncaught errors
+
         window.addEventListener('error', function (e) {
             console.error('Global error:', e.error);
         });
 
-        // Handle any promise rejections
+
         window.addEventListener('unhandledrejection', function (e) {
             console.error('Unhandled promise rejection:', e.reason);
         });

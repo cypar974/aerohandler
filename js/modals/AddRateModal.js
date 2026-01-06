@@ -9,7 +9,7 @@ export class AddRateModal {
         this.onRateSaved = null;
         this.planesData = [];
         this.aircraftAutocomplete = null;
-        this.editingRateId = null; // Track if we are editing
+        this.editingRateId = null;
     }
 
     /**
@@ -25,18 +25,18 @@ export class AddRateModal {
             await this.createModal();
         }
 
-        // 1. Reset first (clears previous ID and form data)
+
         this.resetForm();
 
-        // 2. SET the ID afterwards (so it survives)
+
         this.editingRateId = rateToEdit ? rateToEdit.id : null;
 
-        // --- EDIT MODE ---
+
         if (rateToEdit) {
             this.setModalTitle('Edit Rate');
             this.populateForm(rateToEdit);
         }
-        // --- ADD MODE ---
+
         else {
             this.setModalTitle('Add New Rate');
             this.handleAddModePreselections(preSelectedAircraftId, preSelectedType);
@@ -59,7 +59,7 @@ export class AddRateModal {
         const titleEl = this.modal.querySelector('h2');
         if (titleEl) titleEl.textContent = title;
 
-        // Update button text
+
         const submitBtn = document.getElementById('submit-rate-btn');
         if (submitBtn) submitBtn.textContent = this.editingRateId ? 'Save Changes' : 'Create Rate';
     }
@@ -244,7 +244,7 @@ export class AddRateModal {
     }
 
     handleAddModePreselections(preSelectedAircraftId, preSelectedType) {
-        // Aircraft Pre-select
+
         if (preSelectedAircraftId) {
             const selectedPlane = this.planesData.find(p => p.id === preSelectedAircraftId);
             if (selectedPlane) {
@@ -252,7 +252,7 @@ export class AddRateModal {
             }
         }
 
-        // Type Pre-select
+
         if (preSelectedType) {
             const typeSelect = document.getElementById('add-rate-type');
             if (typeSelect) {
@@ -263,27 +263,27 @@ export class AddRateModal {
     }
 
     populateForm(rate) {
-        // 1. Set Aircraft (using autocomplete logic)
-        // Rate object likely has 'model_id' or similar depending on your view
+
+
         const modelId = rate.model_id;
-        // We might need to find the model name from our loaded data if not provided in 'rate'
-        // Ideally 'rate' passed here should have the model ID.
+
+
         const model = this.planesData.find(m => m.id === modelId);
-        const modelName = model ? model.model_name : (rate.model_name || ''); // Fallback
+        const modelName = model ? model.model_name : (rate.model_name || '');
 
         if (modelId) {
             this.setAircraftSelection(modelId, modelName);
         }
 
-        // 2. Set Basic Fields
+
         document.getElementById('add-rate-type').value = rate.rate_type;
         document.getElementById('add-rate-amount').value = rate.amount;
         document.getElementById('add-rate-description').value = rate.description || '';
 
-        // 3. Handle Rate Name / Type
+
         const typeSelect = document.getElementById('add-rate-type');
 
-        // Logic: If the rate name is custom (not matching the select label), treat as "other" OR if type is strictly 'other'
+
         const isStandardType = ['student_hourly', 'instructor_hourly', 'standard_hourly', 'checkride_prep'].includes(rate.rate_type);
 
         if (rate.rate_type === 'other' || (!isStandardType && rate.rate_name)) {
@@ -294,7 +294,7 @@ export class AddRateModal {
             document.getElementById('add-rate-name').value = '';
         }
 
-        // Trigger UI update for name field
+
         this.toggleRateNameField(typeSelect.value);
     }
 
@@ -332,19 +332,19 @@ export class AddRateModal {
             const amountVal = parseFloat(document.getElementById('add-rate-amount').value);
             if (amountVal < 0) {
                 showToast('Amount cannot be negative', 'error');
-                return; // Stop the function here
+                return;
             }
 
             const typeSelect = document.getElementById('add-rate-type');
             const rateType = typeSelect.value;
             const rateNameInput = document.getElementById('add-rate-name').value;
 
-            // Determine rate name
+
             let finalRateName;
             if (rateType === 'other') {
                 finalRateName = rateNameInput;
             } else {
-                // Use the text of the selected option
+
                 finalRateName = typeSelect.options[typeSelect.selectedIndex].text;
             }
 
@@ -356,7 +356,7 @@ export class AddRateModal {
                 description: document.getElementById('add-rate-description').value,
             };
 
-            // Add created_by only for inserts
+
             if (!this.editingRateId) {
                 payload.created_by = user?.id || null;
             }
@@ -364,14 +364,14 @@ export class AddRateModal {
             let error;
 
             if (this.editingRateId) {
-                // --- UPDATE ---
+
                 const response = await supabase.schema('api').rpc('update_billing_rate', {
                     rate_uuid: this.editingRateId,
                     payload: payload
                 });
                 error = response.error;
             } else {
-                // --- INSERT ---
+
                 const response = await supabase.schema('api').rpc('insert_billing_rate', { payload });
                 error = response.error;
             }

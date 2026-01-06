@@ -2,7 +2,7 @@ import { supabase } from '../supabase.js';
 
 export async function loadDashboardPage() {
     try {
-        // Fetch all data in parallel for better performance
+
         const [
             studentsData,
             aircraftData,
@@ -17,7 +17,7 @@ export async function loadDashboardPage() {
             fetchFinancialMetrics()
         ]);
 
-        // UI RENDERING - PRESERVED EXACTLY AS IS
+
         document.getElementById("main-content").innerHTML = `
             <div class="p-6 bg-gray-900 text-white min-h-full">
                 <h1 class="text-3xl font-bold mb-2">AeroClub Dashboard</h1>
@@ -154,15 +154,15 @@ export async function loadDashboardPage() {
 
 async function fetchTotalStudents() {
     try {
-        // "Secure Function" Rule: Direct access to views is blocked.
-        // We must use the secure RPC function that handles permission logic.
+
+
         const { data, error } = await supabase
             .schema('api')
             .rpc('get_members');
 
         if (error) throw error;
 
-        // Filter the returned member list for students and count them
+
         const studentCount = data ? data.filter(m => m.type === 'student').length : 0;
 
         return studentCount;
@@ -174,11 +174,11 @@ async function fetchTotalStudents() {
 
 async function fetchActiveAircraft() {
     try {
-        // RPC Rule: Use the API function because direct access to 'planes' table is restricted.
+
         const { data, error } = await supabase.schema('api').rpc('get_available_planes');
 
         if (error) throw error;
-        // In "Demo" mode, we calculate count in JS since RPC returns the set
+
         return data ? data.length : 0;
     } catch (error) {
         console.error('Error fetching aircraft:', error);
@@ -190,14 +190,14 @@ async function fetchUpcomingBookings() {
     try {
         const today = new Date().toISOString();
 
-        // RPC Rule: Use the API function to respect RLS/Schema restrictions.
-        // We fetch bookings and filter in memory for the demo. 
-        // Note: For production with large data, we would add a specific RPC param for date.
+
+
+
         const { data, error } = await supabase.schema('api').rpc('get_bookings');
 
         if (error) throw error;
 
-        // Filter for upcoming
+
         const count = data.filter(b => b.start_time >= today).length;
         return count;
     } catch (error) {
@@ -212,12 +212,12 @@ async function fetchFlightHoursThisMonth() {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-        // RPC Rule: Use the API function
+
         const { data, error } = await supabase.schema('api').rpc('get_flight_logs');
 
         if (error) throw error;
 
-        // Filter and Sum in JS (Demo Mode)
+
         const totalHours = data
             .filter(flight =>
                 flight.flight_date >= startOfMonth &&
@@ -234,8 +234,8 @@ async function fetchFlightHoursThisMonth() {
 
 async function fetchFinancialMetrics() {
     try {
-        // 1. Fetch from the new Smart View
-        // This view consolidates all transactions and is safe for reading.
+
+
         const { data: ledger, error } = await supabase
             .schema('api')
             .rpc('get_financial_ledger');
@@ -245,9 +245,9 @@ async function fetchFinancialMetrics() {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        // 2. Process data in JS (Logic Lock: Calculate to match old UI requirements)
 
-        // Metrics: Pending Receivable (Owed TO Club)
+
+
         const pendingReceivable = ledger
             .filter(t => t.transaction_direction === 'receivable' && t.status === 'pending')
             .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
@@ -255,7 +255,7 @@ async function fetchFinancialMetrics() {
         const pendingReceivableCount = ledger
             .filter(t => t.transaction_direction === 'receivable' && t.status === 'pending').length;
 
-        // Metrics: Pending Payable (Owed BY Club)
+
         const pendingPayable = ledger
             .filter(t => t.transaction_direction === 'payable' && t.status === 'pending')
             .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
@@ -263,8 +263,8 @@ async function fetchFinancialMetrics() {
         const pendingPayableCount = ledger
             .filter(t => t.transaction_direction === 'payable' && t.status === 'pending').length;
 
-        // Metrics: Net Cash Flow (This Month)
-        // We only count 'paid' status for cash flow
+
+
         const thisMonthTransactions = ledger.filter(t => {
             const txDate = new Date(t.created_at || t.due_date);
             return txDate >= startOfMonth && t.status === 'paid';
@@ -280,16 +280,16 @@ async function fetchFinancialMetrics() {
 
         const netCashFlow = monthlyIncome - monthlyExpenses;
 
-        // 3. Map Recent Transactions for UI
-        // The UI expects 'transaction_type' to be 'incoming' or 'outgoing'.
-        // The SQL returns 'transaction_direction' as 'receivable' or 'payable'.
+
+
+
         const recentTransactions = ledger
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .slice(0, 5)
             .map(t => ({
                 description: t.description || 'Transaction',
                 amount: Number(t.amount),
-                // Data Adaptation: Map SQL Enum to UI String
+
                 transaction_type: t.transaction_direction === 'receivable' ? 'incoming' : 'outgoing',
                 payment_date: t.created_at || t.due_date
             }));

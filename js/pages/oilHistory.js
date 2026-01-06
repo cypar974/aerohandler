@@ -77,8 +77,8 @@ async function fetchData() {
         renderStats();
         renderTable(allOilLogs);
 
-        // --- NEW AUTOCOMPLETE LOGIC START ---
-        // 1. Extract unique aircraft
+
+
         const uniquePlanesMap = new Map();
 
         allOilLogs.forEach(log => {
@@ -94,10 +94,10 @@ async function fetchData() {
 
         const planeDataSource = Array.from(uniquePlanesMap.values());
 
-        // 2. Initialize Autocomplete
+
         const inputElement = document.getElementById("search-tail");
 
-        // Clone to clear previous event listeners
+
         const newElement = inputElement.cloneNode(true);
         inputElement.parentNode.replaceChild(newElement, inputElement);
 
@@ -115,7 +115,7 @@ async function fetchData() {
                 filterData(query);
             }
         });
-        // --- NEW AUTOCOMPLETE LOGIC END ---
+
 
     } catch (err) {
         console.error("Error fetching oil logs:", err);

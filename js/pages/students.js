@@ -9,14 +9,14 @@ let sortState = { column: null, direction: "none" };
 let searchState = { column: "first_name", query: "" };
 let currentPage = 1;
 const rowsPerPage = 10;
-let searchAutocomplete = null; // Reference to the Autocomplete instance
+let searchAutocomplete = null;
 
 export async function loadStudentsPage() {
-    // --- DEMO MODE: PERMISSIONS FLAG ---
-    const canManageStudents = true; // Mock Admin permission
-    // -----------------------------------
 
-    document.getElementById("main-content").innerHTML = /*html */ `
+    const canManageStudents = true;
+
+
+    document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-white mb-2">Student Management</h1>
@@ -236,30 +236,30 @@ function setupEventListeners() {
         await addStudent();
     });
 
-    // --- REVISITED AUTOCOMPLETE IMPLEMENTATION ---
+
     const searchBox = document.getElementById("search-box");
 
-    // We initialize the Autocomplete component on the search box.
-    // This allows real-time filtering (via onInput) AND smart suggestions.
+
+
     if (searchBox) {
         searchAutocomplete = new Autocomplete({
             inputElement: searchBox,
-            dataSource: [], // Will be populated in fetchStudents
-            allowedTypes: ['student'], // Strict type checking using the new feature
-            displayField: 'name', // Constructed field
+            dataSource: [],
+            allowedTypes: ['student'],
+            displayField: 'name',
             valueField: 'id',
             additionalFields: ['email', 'student_number'],
             placeholder: 'Search by name or email...',
-            // 1. Filter the table as the user types
+
             onInput: (query) => {
                 searchState.query = query.toLowerCase();
                 currentPage = 1;
                 renderTable();
             },
-            // 2. Navigate immediately if a user clicks a suggestion
+
             onSelect: (item) => {
                 if (item && item.rawItem && item.rawItem.id) {
-                    navigateToStudent(item.rawItem.id); // <--- Passing UUID
+                    navigateToStudent(item.rawItem.id);
                 }
             }
         });
@@ -287,7 +287,7 @@ function setupEventListeners() {
         }
     });
 
-    // Click outside modal to close
+
     document.getElementById("student-modal").addEventListener("click", (e) => {
         if (e.target.id === "student-modal") {
             hideAddModal();
@@ -314,7 +314,7 @@ async function fetchStudents() {
         const { data, error } = await supabase.schema('api').rpc('get_students');
 
         if (!error) {
-            // NORMALIZE DATA
+
             studentsData = data.map(s => ({
                 ...s,
                 membership_status: s.membership_status || 'active',
@@ -322,11 +322,11 @@ async function fetchStudents() {
                 total_hours: s.total_hours || 0
             }));
 
-            // --- UPDATE AUTOCOMPLETE DATA ---
+
             if (searchAutocomplete) {
-                // Map the data to fit the Autocomplete schema
-                // We add a 'name' field and strictly set 'type' to 'student'
-                // to ensure the allowedTypes filter works correctly.
+
+
+
                 const autocompleteData = studentsData.map(s => ({
                     ...s,
                     name: `${s.first_name} ${s.last_name}`,
@@ -383,14 +383,14 @@ function showLoading(show) {
 }
 
 function renderTable() {
-    // Filter by search
+
     let filteredData = studentsData.filter(student => {
         if (!searchState.query) return true;
 
-        // If searching via Autocomplete/Searchbox (first_name + last_name check)
-        // or specific columns via dropdown
+
+
         if (searchState.column === 'first_name') {
-            // "Smart" search: check full name concatenation if default column is selected
+
             const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
             if (fullName.includes(searchState.query)) return true;
         }
@@ -399,7 +399,7 @@ function renderTable() {
         return value.includes(searchState.query);
     });
 
-    // Show empty state if no results
+
     const emptyState = document.getElementById("empty-state");
     const tableBody = document.getElementById("students-table");
 
@@ -412,7 +412,7 @@ function renderTable() {
         emptyState.classList.add("hidden");
     }
 
-    // Sort data
+
     if (sortState.direction !== "none") {
         filteredData.sort((a, b) => {
             let aVal = a[sortState.column] || "";
@@ -427,13 +427,13 @@ function renderTable() {
         });
     }
 
-    // Pagination calculations
+
     const totalPages = Math.ceil(filteredData.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
-    // Table rendering
+
     tableBody.innerHTML = pageData.map((student, index) => `
         <tr class="hover:bg-gray-750 transition-colors cursor-pointer group" data-id="${student.id}">
             <td class="p-4 border-b border-gray-700">
@@ -497,13 +497,13 @@ function renderTable() {
         </tr>
     `).join('');
 
-    // Add click listeners
+
     tableBody.querySelectorAll('tr[data-id]').forEach(row => {
         row.addEventListener('click', (e) => {
-            // Prevent navigation if clicking action buttons (View/Edit/Delete)
+
             if (!e.target.closest('button')) {
                 const studentId = row.getAttribute('data-id');
-                // JUST pass the ID. No "student_number || id" check needed.
+
                 if (studentId) {
                     navigateToStudent(studentId);
                 }
@@ -511,12 +511,12 @@ function renderTable() {
         });
     });
 
-    // Add button listeners
+
     tableBody.querySelectorAll('.view-student').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const studentId = btn.getAttribute('data-id');
-            // Just pass the ID
+
             if (studentId) {
                 navigateToStudent(studentId);
             }
@@ -543,11 +543,11 @@ function renderTable() {
     renderPagination(totalPages, filteredData.length);
 }
 
-function navigateToStudent(studentId) {      // <--- 1. Rename parameter to studentId
+function navigateToStudent(studentId) {
     window.dispatchEvent(new CustomEvent('navigate', {
         detail: {
             page: 'studentdetails',
-            studentId: studentId,            // <--- 2. Now this works
+            studentId: studentId,
             backPage: 'students'
         }
     }));
@@ -584,16 +584,16 @@ function updateSortArrows() {
     });
 }
 
-function renderPagination(totalPages, totalItems) { // <--- ADD totalItems parameter
+function renderPagination(totalPages, totalItems) {
     const pagination = document.getElementById("pagination");
 
-    // If no items, clear pagination
+
     if (totalItems === 0) {
         pagination.innerHTML = '';
         return;
     }
 
-    // Dynamic Calculation using the passed totalItems
+
     const startItem = (currentPage - 1) * rowsPerPage + 1;
     const endItem = Math.min(currentPage * rowsPerPage, totalItems);
 
@@ -612,7 +612,7 @@ function renderPagination(totalPages, totalItems) { // <--- ADD totalItems param
         `;
     }
 
-    // Show page numbers with ellipsis for many pages
+
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -681,13 +681,13 @@ async function addStudent() {
         const month = document.getElementById("dob-month").value;
         const year = document.getElementById("dob-year").value;
 
-        // Validation
+
         if (!firstName || !lastName || !email) {
             showToast("Please fill in all required fields", "error");
             return;
         }
 
-        // Date validation
+
         const dob = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         const dobDate = new Date(dob);
         if (isNaN(dobDate.getTime())) {
@@ -698,7 +698,7 @@ async function addStudent() {
         const phone = document.getElementById("student-phone").value.trim();
         const license = document.getElementById("license-number").value.trim();
 
-        // 1. Calculate Student Number
+
         const { data: allStudents, error: fetchError } = await supabase.schema('api').rpc('get_students');
 
         if (fetchError) throw fetchError;
@@ -725,17 +725,17 @@ async function addStudent() {
             membership_status: 'active'
         };
 
-        // 2. Insert into Database (Create Auth User + Profile)
+
         const { error } = await supabase.schema('api').rpc('insert_student', { payload });
 
         if (error) throw error;
 
-        // ============================================================
-        // 3. 📧 SEND PASSWORD RESET EMAIL (The Bridge Logic)
-        // ============================================================
+
+
+
         try {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-                // This dynamically sets the URL to your Vercel or Localhost
+
                 redirectTo: window.location.origin + '/update-password.html'
             });
 
@@ -749,11 +749,11 @@ async function addStudent() {
             console.error("Unexpected email error:", emailErr);
             showToast("Student saved, but Invite Email failed.", "warning");
         }
-        // ============================================================
+
 
         hideAddModal();
         await fetchStudents();
-        // showToast("Student added successfully!", "success"); // Removed to avoid double toasts
+
 
     } catch (error) {
         console.error('Error adding student:', JSON.stringify(error, null, 2));
@@ -789,7 +789,7 @@ async function editStudent(studentId) {
         const { data: students, error } = await supabase.schema('api').rpc('get_student_by_id', { student_uuid: studentId });
 
         if (error) throw error;
-        // RPC returns an array (SETOF), take the first one
+
         const student = students && students.length > 0 ? students[0] : null;
 
         if (student) {
@@ -914,10 +914,10 @@ function showEditModal(student) {
         </div>
     `;
 
-    // Add modal to DOM
+
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    // Populate form fields
+
     document.getElementById("edit-student-first-name").value = student.first_name || "";
     document.getElementById("edit-student-last-name").value = student.last_name || "";
     document.getElementById("edit-student-email").value = student.email || "";
@@ -942,7 +942,7 @@ function showEditModal(student) {
         document.getElementById("edit-dob-year").value = parseInt(year);
     }
 
-    // Add event listeners
+
     document.getElementById("close-edit-modal").addEventListener("click", hideEditModal);
     document.getElementById("cancel-edit-btn").addEventListener("click", hideEditModal);
     document.getElementById("edit-student-form").addEventListener("submit", async (e) => {
@@ -950,7 +950,7 @@ function showEditModal(student) {
         await updateStudent(student.id);
     });
 
-    // Click outside to close
+
     document.getElementById("edit-student-modal").addEventListener("click", (e) => {
         if (e.target.id === "edit-student-modal") {
             hideEditModal();
@@ -983,13 +983,13 @@ async function updateStudent(studentId) {
         const month = document.getElementById("edit-dob-month").value;
         const year = document.getElementById("edit-dob-year").value;
 
-        // Validation
+
         if (!firstName || !lastName || !email) {
             showToast("Please fill in all required fields", "error");
             return;
         }
 
-        // Date validation
+
         const dob = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         const dobDate = new Date(dob);
         if (isNaN(dobDate.getTime())) {

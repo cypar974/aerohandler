@@ -7,7 +7,7 @@ import { showToast } from "../components/showToast.js";
 export class CreatePayableModal {
     constructor() {
         this.modalId = 'payable-modal';
-        this.peopleData = []; // Stores raw data from view
+        this.peopleData = [];
         this.onCloseCallback = null;
         this.datePicker = null;
         this.autocompleteInstance = null;
@@ -30,7 +30,7 @@ export class CreatePayableModal {
         return this.initPromise;
     }
 
-    // Fetches raw data using the same secure RPC as the Invoice modal
+
     async loadPeople() {
         try {
             const { data, error } = await supabase.schema('api').rpc('get_members');
@@ -48,11 +48,11 @@ export class CreatePayableModal {
     render() {
         if (document.getElementById(this.modalId)) return;
 
-        // --- DEMO MODE: PERMISSIONS FLAG ---
-        const canCreatePayable = true;
-        // -----------------------------------
 
-        // Icons for UI
+        const canCreatePayable = true;
+
+
+
         const iconUser = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`;
         const iconDollar = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
         const iconDesc = `<svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>`;
@@ -177,7 +177,7 @@ export class CreatePayableModal {
 
             document.getElementById('payable-amount')?.addEventListener('input', () => this.updateTotal());
 
-            // Clear details if input is cleared manually
+
             document.getElementById('payable-person')?.addEventListener('input', (e) => {
                 if (!e.target.value.trim()) {
                     this.hidePersonDetails();
@@ -185,7 +185,7 @@ export class CreatePayableModal {
                 }
             });
 
-            // Close on Escape or Click Outside
+
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') this.hide();
             });
@@ -218,20 +218,20 @@ export class CreatePayableModal {
                 peopleData: this.peopleData,
                 roleFilter: 'all',
                 onSelect: async (selected) => {
-                    // 1. Get the local person object to ensure we have the 'type'
+
                     const fullPerson = this.peopleData.find(p => p.id === selected.id) || selected;
 
-                    // 2. Set the type immediately
+
                     const type = fullPerson.type || 'other_person';
                     document.getElementById('payable-person-type').value = type;
 
-                    // 3. Update UI immediately with what we have
+
                     this.showPersonDetails(fullPerson, 'Loading email...');
 
-                    // 4. Fetch the email asynchronously to be safe
+
                     const email = await this.fetchPersonEmail(fullPerson.id, type);
 
-                    // 5. Update UI again with the email
+
                     this.showPersonDetails(fullPerson, email);
                 }
             });
@@ -312,19 +312,19 @@ export class CreatePayableModal {
         const modal = document.getElementById(this.modalId);
         if (!modal) return;
 
-        // Reset Form
+
         document.getElementById('payable-form').reset();
         this.hidePersonDetails();
         document.getElementById('payable-person-id').value = '';
         document.getElementById('payable-person-type').value = '';
 
-        // Default to today + 30 days
+
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 30);
         document.getElementById('payable-due-date').value = dueDate.toISOString().split('T')[0];
         document.getElementById('payable-total').textContent = '0.00';
 
-        // Handle Prefills (e.g., creating a payable from an Instructor profile)
+
         if (params.personId) {
             this.prefillPerson(params.personId);
         }
@@ -337,7 +337,7 @@ export class CreatePayableModal {
         try {
             let person = this.peopleData.find(p => p.id === personId);
 
-            // Fetch if missing
+
             if (!person) {
                 const { data, error } = await supabase.schema('api').rpc('get_members');
                 if (!error && data) {
@@ -361,7 +361,7 @@ export class CreatePayableModal {
                 document.getElementById('payable-person-id').value = person.id;
                 document.getElementById('payable-person-type').value = person.type;
 
-                // Trigger robust email fetch
+
                 this.showPersonDetails(person, 'Loading email...');
                 const email = await this.fetchPersonEmail(person.id, person.type);
                 this.showPersonDetails(person, email);
@@ -416,7 +416,7 @@ export class CreatePayableModal {
 
             this.hide();
 
-            // Notify parent components to refresh lists
+
             document.dispatchEvent(new CustomEvent('payableCreated', {
                 detail: {
                     amount: amount,
@@ -434,11 +434,11 @@ export class CreatePayableModal {
     }
 
     async createFinancialTransaction(personId, personType, dueDate, description, amount) {
-        // --- LOGIC DIFFERENCE FROM INVOICE MODAL ---
-        // For this modal, the direction is ALWAYS 'payable' (Club pays out)
+
+
         const direction = 'payable';
 
-        // Infer transaction type based on role
+
         let type = 'other';
         if (personType === 'instructor') type = 'instructor';
         if (personType === 'maintenance_technician') type = 'maintenance';
@@ -450,7 +450,7 @@ export class CreatePayableModal {
             amount: amount,
             due_date: dueDate,
             description: description,
-            status: 'pending' // Default status
+            status: 'pending'
         };
 
         const { data, error } = await supabase.schema('api').rpc('insert_financial_transaction', { payload });

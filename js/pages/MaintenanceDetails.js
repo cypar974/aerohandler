@@ -9,7 +9,7 @@ let currentTicketData = null;
 export async function loadMaintenanceDetailsPage(maintenanceId) {
     const content = document.getElementById("main-content");
 
-    // 1. Loading State
+
     content.innerHTML = `
         <div class="flex flex-col h-full text-white">
             <div class="mb-6">
@@ -24,23 +24,23 @@ export async function loadMaintenanceDetailsPage(maintenanceId) {
         </div>
     `;
 
-    // 2. Attach Back Button immediately
+
     document.getElementById("back-btn").addEventListener("click", () => {
         loadMaintenancePage();
     });
 
     try {
-        // 3. Fetch Data
+
         const { data: ticket, error: ticketError } = await supabase.schema('api')
             .rpc('get_maintenance_by_id', { maintenance_uuid: maintenanceId })
             .single();
 
         if (ticketError) throw ticketError;
 
-        // Store for the modal to use later
+
         currentTicketData = ticket;
 
-        // Parallel Fetch: Plane & People
+
         const [planeRes, authorName, technicianName] = await Promise.all([
             supabase.schema('api').rpc('get_plane_by_id', { plane_uuid: ticket.plane_id }).single(),
             resolvePersonName(ticket.created_by),
@@ -49,7 +49,7 @@ export async function loadMaintenanceDetailsPage(maintenanceId) {
 
         const plane = planeRes.data;
 
-        // 4. Render Details
+
         renderDetails(ticket, plane, authorName, technicianName);
 
     } catch (error) {
@@ -68,10 +68,10 @@ async function resolvePersonName(userId) {
 
     if (!userData || !userData.person_id) return "Unknown User";
 
-    // FIX: Use secure RPC instead of view
+
     const { data: members, error } = await supabase.schema('api').rpc('get_members');
 
-    // Find the specific person in the returned list
+
     const personData = members ? members.find(p => p.id === userData.person_id) : null;
 
     if (personData) {
@@ -101,7 +101,7 @@ function renderDetails(ticket, plane, authorName, technicianName) {
         hoursDiffDisplay = `<span class="${color} text-sm">(${diff > 0 ? '+' : ''}${diff.toFixed(1)} remaining)</span>`;
     }
 
-    content.innerHTML = /*html*/`
+    content.innerHTML = `
         <div class="flex flex-col h-full text-white animate-fade-in pb-10">
             <div class="mb-6 flex justify-between items-start">
                 <div>
@@ -219,7 +219,7 @@ function renderDetails(ticket, plane, authorName, technicianName) {
 
     document.getElementById("back-btn-final").addEventListener("click", () => loadMaintenancePage());
 
-    // Attach listener to the Edit button to open the modal
+
     document.getElementById("edit-ticket-btn").addEventListener("click", () => {
         openEditModal(ticket);
     });
@@ -242,10 +242,10 @@ function getStatusColor(status) {
 function openEditModal(ticket) {
     const modalContainer = document.getElementById("modal-container");
 
-    // Define enum options based on SQL 'maintenance_status_enum'
+
     const statusOptions = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
 
-    modalContainer.innerHTML = /*html*/`
+    modalContainer.innerHTML = `
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
             <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-2xl w-full max-w-lg mx-4 overflow-hidden transform transition-all scale-100">
                 <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
@@ -294,7 +294,7 @@ function openEditModal(ticket) {
         </div>
     `;
 
-    // Event Listeners for Modal
+
     document.getElementById("close-modal-btn").onclick = closeEditModal;
     document.getElementById("cancel-edit-btn").onclick = closeEditModal;
     document.getElementById("edit-ticket-form").onsubmit = (e) => handleEditSubmit(e, ticket.id);
@@ -302,7 +302,7 @@ function openEditModal(ticket) {
 
 function closeEditModal() {
     const container = document.getElementById("modal-container");
-    container.innerHTML = ""; // Clear the modal from DOM
+    container.innerHTML = "";
 }
 
 async function handleEditSubmit(e, ticketId) {
@@ -314,8 +314,8 @@ async function handleEditSubmit(e, ticketId) {
     submitBtn.innerText = "Saving...";
 
     const payload = {
-        // We reuse the existing plane_id because the RPC requires it to fetch the row or keep it, 
-        // though strictly the SQL COALESCE handles nulls. We send it just in case.
+
+
         plane_id: currentTicketData.plane_id,
         status: document.getElementById("edit-status").value,
         due_hours: document.getElementById("edit-due-hours").value || null,
@@ -335,7 +335,7 @@ async function handleEditSubmit(e, ticketId) {
         showToast("Ticket updated successfully", "success");
         closeEditModal();
 
-        // Reload the page to show updated data
+
         loadMaintenanceDetailsPage(ticketId);
 
     } catch (err) {

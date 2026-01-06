@@ -13,27 +13,27 @@ export class AddBookingModal {
         this.isOpen = false;
         this.isInitialized = false;
 
-        // Callbacks
+
         this.onCloseCallback = null;
         this.onSuccessCallback = null;
 
-        // Picker Instances
+
         this.datePickerInstance = null;
         this.timePickerInstances = {
             start: null,
             end: null
         };
 
-        // Data Storage
-        this.planes = [];
-        this.combinedPersonnel = []; // Raw data from  (Person IDs)
-        this.personToUserMap = {};   // Map: PersonUUID -> UserUUID (Auth IDs)
-        this.currentBookingType = 'instruction'; // 'instruction' or 'regular'
 
-        // Autocomplete Management
+        this.planes = [];
+        this.combinedPersonnel = [];
+        this.personToUserMap = {};
+        this.currentBookingType = 'instruction';
+
+
         this.autocompleteInstances = {};
 
-        // Bind methods
+
         this.handleModalClick = this.handleModalClick.bind(this);
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleFormSubmit = this.handleFormSubmit.bind(this);
@@ -68,7 +68,7 @@ export class AddBookingModal {
             console.log("🔄 Fetching modal data...");
             const roles = ['student', 'instructor', 'regular_pilot', 'maintenance_technician', 'other_person'];
 
-            // Fetch planes, member names, and mapping data in parallel
+
             const [planesResponse, membersResponse, ...userResponses] = await Promise.all([
                 supabase.schema('api').rpc('get_planes'),
                 getMembers(),
@@ -81,15 +81,15 @@ export class AddBookingModal {
             this.planes = planesResponse.data || [];
             this.combinedPersonnel = membersResponse.data || [];
 
-            // Reset and Rebuild Map
+
             this.personToUserMap = {};
             let mapCount = 0;
 
             userResponses.forEach(response => {
                 if (response.data) {
                     response.data.forEach(u => {
-                        // Map: Person Table ID -> Users Table ID (Auth)
-                        // This allows us to convert the Autocomplete ID (Person) to the FK ID (User)
+
+
                         if (u.person_id && u.id) {
                             this.personToUserMap[u.person_id] = u.id;
                             mapCount++;
@@ -274,8 +274,8 @@ export class AddBookingModal {
     setupEventListeners() {
         this.cleanupAutocompleteInstances();
 
-        // Pass 'this.combinedPersonnel' which contains Person IDs
-        // The Map checks happen on Submit
+
+
         const commonConfig = { peopleData: this.combinedPersonnel };
 
         this.autocompleteInstances['instructor'] = setupPersonAutocomplete({ ...commonConfig, inputId: 'instructor-name', hiddenId: 'instructor-uuid', roleFilter: 'instructors' });
@@ -303,7 +303,7 @@ export class AddBookingModal {
             const [sH, sM] = start.split(':').map(Number);
             const [eH, eM] = end.split(':').map(Number);
             let mins = (eH * 60 + eM) - (sH * 60 + sM);
-            if (mins < 0) mins += 1440; // Handle overnight
+            if (mins < 0) mins += 1440;
 
             const h = Math.floor(mins / 60);
             const m = mins % 60;
@@ -334,7 +334,7 @@ export class AddBookingModal {
         if (this.isOpen) return;
 
         try {
-            await this.init(); // Ensures Data is loaded
+            await this.init();
             this.resetForm();
 
             this.modal.classList.remove("hidden");
@@ -351,7 +351,7 @@ export class AddBookingModal {
 
             setTimeout(() => {
                 this.initializeCustomPickers();
-                this.setupEventListeners(); // Re-attach for fresh DOM
+                this.setupEventListeners();
             }, 200);
 
         } catch (error) {
@@ -424,7 +424,7 @@ export class AddBookingModal {
                     document.getElementById("instructor-name").value = name;
                     document.getElementById("instructor-uuid").value = p.id;
                 }
-                // Pre-fill pilot as fallback
+
                 document.getElementById("pilot-name").value = name;
                 document.getElementById("pilot-uuid").value = p.id;
             }
@@ -497,14 +497,14 @@ export class AddBookingModal {
 
             const { data: { user } } = await supabase.auth.getUser();
 
-            // --- CRITICAL ID RESOLUTION ---
-            const resolveUserId = (personId, roleLabel) => {
-                if (!personId) return null; // Optional fields return null
 
-                // Lookup Person ID (from Autocomplete) in Map to get User ID (Auth)
+            const resolveUserId = (personId, roleLabel) => {
+                if (!personId) return null;
+
+
                 const userId = this.personToUserMap[personId];
 
-                // Strict Validation: If the person exists in Autocomplete but NOT in Map, they have no User account
+
                 if (!userId) {
                     throw new Error(`The selected ${roleLabel} does not have an active User Account. Please ensure they are registered as a user.`);
                 }
@@ -522,7 +522,7 @@ export class AddBookingModal {
 
             if (this.currentBookingType === 'instruction') {
                 payload.instructor_id = resolveUserId(document.getElementById("instructor-uuid").value, "Instructor");
-                payload.pilot_id = resolveUserId(document.getElementById("student1-uuid").value, "Student 1"); // Student 1 is the Pilot in command usually
+                payload.pilot_id = resolveUserId(document.getElementById("student1-uuid").value, "Student 1");
                 payload.student2_id = resolveUserId(document.getElementById("student2-uuid").value, "Student 2");
                 payload.student3_id = resolveUserId(document.getElementById("student3-uuid").value, "Student 3");
             } else {
@@ -542,9 +542,9 @@ export class AddBookingModal {
 
         } catch (error) {
             console.error('Submission Error:', error);
-            // Show specific mapping errors to the user
+
             this.showError(error.message);
-            // Also toast for visibility
+
             if (!error.message.includes("active User Account")) {
                 showToast(error.message, 'error');
             }
@@ -583,7 +583,7 @@ export class AddBookingModal {
     }
 
     cleanupCustomPickers() {
-        // Cleanup logic remains same as original
+
         document.querySelectorAll('.custom-date-picker-container, .custom-time-picker-container').forEach(e => e.remove());
         if (this.datePickerInstance?.destroy) this.datePickerInstance.destroy();
         if (this.timePickerInstances.start?.destroy) this.timePickerInstances.start.destroy();

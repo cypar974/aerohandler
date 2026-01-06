@@ -144,7 +144,7 @@ export class InstructorModal {
     }
 
     resetForm() {
-        // Safe null checks added here
+
         const titleEl = document.getElementById('instructor-modal-title');
         if (titleEl) titleEl.textContent = 'Add New Instructor';
 
@@ -218,7 +218,7 @@ export class InstructorModal {
                 }
             }
 
-            this.hide(); // This calls resetForm, but now it won't crash
+            this.hide();
 
             if (this.onInstructorSaved) {
                 this.onInstructorSaved();
@@ -228,7 +228,7 @@ export class InstructorModal {
             console.error('Error saving instructor:', error);
             showToast(`Error ${this.isEditMode ? 'updating' : 'adding'} instructor: ${error.message}`, "error");
         } finally {
-            // This restores the original button content (with the span)
+
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         }

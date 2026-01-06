@@ -114,7 +114,7 @@
     background-color: transparent !important;
 }
 
-/* Calendar day styles */
+
 .calendar-day {
     padding: 0.5rem;
     text-align: center;
@@ -146,7 +146,7 @@
     background: transparent;
 }
 
-/* Calendar navigation */
+
 .custom-calendar .prev-month,
 .custom-calendar .next-month {
     background: #374151;
@@ -226,7 +226,7 @@
     z-index: 10;
 }
 
-/* Hide native pickers on desktop */
+
 @media (hover: hover) and (pointer: fine) {
 
     input[type="date"],
@@ -294,14 +294,14 @@
     border-color: #3b82f6;
 }
 
-/* Ensure custom picker containers are properly removed */
+
 .custom-date-picker-container.destroyed,
 .custom-time-picker-container.destroyed {
     display: none !important;
     pointer-events: none !important;
 }
 
-/* Reset native inputs when custom pickers are active */
+
 .custom-picker-active~input[type="date"],
 .custom-picker-active~input[type="time"] {
     opacity: 0 !important;
@@ -311,14 +311,14 @@
     pointer-events: none !important;
 }
 
-/* Custom scrollbar for modal */
+
 #add-booking-modal ::-webkit-scrollbar {
     width: 6px;
 }
 
 #current-date {
     font-size: 1.125rem;
-    /* equivalent to text-lg */
+    
     font-weight: 500;
 }
 
@@ -357,7 +357,7 @@
     border-color: #374151;
 }
 
-/* Animation classes */
+
 .scale-95 {
     transform: scale(0.95);
 }
@@ -378,7 +378,7 @@
     transition: all 0.3s ease;
 }
 
-/* Custom scrollbar for modal */
+
 #add-booking-modal ::-webkit-scrollbar {
     width: 6px;
 }
@@ -403,19 +403,19 @@
 
 .custom-scrollbar::-webkit-scrollbar-track {
     background: #374151;
-    /* gray-700 equivalent */
+    
     border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #6B7280;
-    /* gray-500 equivalent */
+    
     border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #9CA3AF;
-    /* gray-400 equivalent */
+    
 }
 
 .toast-container {
@@ -435,12 +435,12 @@
 ================================= */
 .autocomplete-suggestions::-webkit-scrollbar {
     display: none;
-    /* Chrome, Safari, Opera */
+    
 }
 
 .autocomplete-suggestions {
     -ms-overflow-style: none;
-    /* IE and Edge */
+    
     scrollbar-width: none;
-    /* Firefox */
+    
 }

@@ -6,16 +6,16 @@ let flightLogModal = null;
 let isInitialized = false;
 
 export async function loadSubmitFlightPage() {
-    // --- DEMO MODE: PERMISSIONS FLAG ---
-    // Context: In the future, this will check if the user has the 'student', 'pilot', or 'instructor' role.
-    // For now, we default to TRUE to allow development.
+
+
+
     const canSubmitFlight = true;
-    // -----------------------------------
+
 
     try {
         console.log('Loading submit flight page...');
 
-        // Clean up any existing instance first
+
         await cleanupSubmitFlightPage();
 
         const mainContent = document.getElementById("main-content");
@@ -23,8 +23,8 @@ export async function loadSubmitFlightPage() {
             throw new Error('Main content element not found');
         }
 
-        // Logic Lock: Preserving existing DOM structure
-        // Flag-Based Pattern: If we add logic later to restrict access, we handle it here.
+
+
         if (!canSubmitFlight) {
             mainContent.innerHTML = `
                 <div class="flex flex-col h-full items-center justify-center text-white">
@@ -46,8 +46,8 @@ export async function loadSubmitFlightPage() {
             </div>
         `;
 
-        // Initialize as standalone component
-        // Note: The Modal inside this function handles the RPC calls and Enum mapping.
+
+
         await initializeFlightLogForm();
         isInitialized = true;
 
@@ -74,20 +74,20 @@ async function initializeFlightLogForm() {
             throw new Error('Flight log container not found');
         }
 
-        // Clear the loading spinner first
+
         container.innerHTML = '';
 
-        // Create new modal instance
-        // The AddFlightLogModal is responsible for:
-        // 1. Fetching people via '
-        // 2. Fetching planes via 'api.get_available_planes'
-        // 3. Submitting via 'api.insert_flight_log' (RPC)
+
+
+
+
+
         flightLogModal = new AddFlightLogModal(container);
 
-        // Initialize but don't show immediately
+
         await flightLogModal.init();
 
-        // Set up success callback
+
         flightLogModal.onSuccess((flightLogData) => {
             showToast('Flight log submitted successfully!', 'success');
             setTimeout(() => {
@@ -95,12 +95,12 @@ async function initializeFlightLogForm() {
             }, 1500);
         });
 
-        // Set up close callback for standalone mode
+
         flightLogModal.onClose(() => {
             window.history.back();
         });
 
-        // Show the form AFTER callbacks are set
+
         await flightLogModal.show();
 
         console.log('Flight log form initialized successfully');
@@ -109,7 +109,7 @@ async function initializeFlightLogForm() {
         console.error('Error initializing flight log form:', error);
         showToast('Error loading flight log form: ' + error.message, 'error');
 
-        // Enhanced error handling (Preserved from original)
+
         const container = document.getElementById('flight-log-container');
         if (container) {
             container.innerHTML = `
@@ -137,7 +137,7 @@ export async function cleanupSubmitFlightPage() {
         flightLogModal = null;
     }
 
-    // Clear the container to ensure clean state
+
     const container = document.getElementById('flight-log-container');
     if (container) {
         container.innerHTML = '';

@@ -10,7 +10,7 @@ const canEdit = true;
 let instructorsData = [];
 let sortState = { column: null, direction: "none" };
 let searchState = { column: "first_name", query: "" };
-let searchAutocomplete = null; // Reference to the autocomplete instance
+let searchAutocomplete = null;
 let tableStateBackup = {
     instructorsData: [],
     currentPage: 1,
@@ -25,7 +25,7 @@ const rowsPerPage = 10;
 
 export async function loadInstructorsPage() {
     instructorModal = new InstructorModal();
-    document.getElementById("main-content").innerHTML = /* html */ `
+    document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-white mb-2">Flight Instructors</h1>
@@ -201,9 +201,9 @@ function setupEventListeners() {
     });
 
 
-    // Note: The Autocomplete component handles its own input events,
-    // but we keep this listener for standard text filtering (e.g. backspace)
-    // or if the user switches the column to something other than Name.
+
+
+
     document.getElementById("search-box").addEventListener("input", e => {
         searchState.query = e.target.value.toLowerCase();
         currentPage = 1;
@@ -223,14 +223,14 @@ function setupEventListeners() {
 }
 
 function initSearchAutocomplete() {
-    // If an instance exists, destroy it to avoid duplicates
+
     if (searchAutocomplete) {
         searchAutocomplete.destroy();
     }
 
-    // Ensure data has the 'type' field for the filter to work correctly
-    // The RPC might not return 'type' if it's strictly the instructors table,
-    // so we inject it here.
+
+
+
     const autocompleteData = instructorsData.map(i => ({
         ...i,
         type: 'instructor'
@@ -242,12 +242,12 @@ function initSearchAutocomplete() {
         peopleData: autocompleteData,
         roleFilter: 'instructors',
         onSelect: (selected) => {
-            // When an instructor is selected from the dropdown:
-            // 1. Force the search column to 'Name' (since autocomplete is name-based)
+
+
             document.getElementById("search-column").value = "first_name";
             searchState.column = "first_name";
 
-            // 2. Set the query to the selected name and filter
+
             searchState.query = selected.value.toLowerCase();
             currentPage = 1;
             renderTable();
@@ -258,16 +258,16 @@ function initSearchAutocomplete() {
 async function fetchInstructors() {
     showLoadingState(true);
 
-    // REFACTOR: Use RPC instead of direct select
+
     const { data, error } = await supabase.schema('api').rpc('get_instructors');
 
     if (!error) {
-        // Sort explicitly by created_at desc as in the original code
+
         instructorsData = data.sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
         );
 
-        // Initialize the autocomplete with the fresh data
+
         initSearchAutocomplete();
 
         updateStatsOverview();
@@ -294,20 +294,20 @@ function updateStatsOverview() {
     );
     document.getElementById("total-hours").textContent = totalHours.toFixed(1);
 
-    // Fetch pending payments for stats
+
     updatePendingPaymentsStats();
 }
 
 async function updatePendingPaymentsStats() {
     try {
-        // FIXED: Use the API function instead of direct table access
+
         const { data, error } = await supabase.schema('api').rpc('get_pending_transactions');
 
         if (error) throw error;
 
         if (data) {
-            // Filter the results in JavaScript (Client-side)
-            // We want: direction = 'payable' AND type = 'instructor'
+
+
             const totalPending = data
                 .filter(t => t.transaction_direction === 'payable' && t.transaction_type === 'instructor')
                 .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
@@ -316,7 +316,7 @@ async function updatePendingPaymentsStats() {
         }
     } catch (error) {
         console.error('Error fetching pending payments:', error);
-        // Optional: show $0.00 or error state
+
         document.getElementById("pending-payments").textContent = "$0.00";
     }
 }
@@ -339,13 +339,13 @@ function renderTable() {
     const tbody = document.getElementById("instructors-table");
     const emptyState = document.getElementById("empty-state");
 
-    // Filter by search
+
     let filteredData = instructorsData.filter(instructor => {
         if (!searchState.query) return true;
 
         let value = "";
         if (searchState.column === "first_name") {
-            // Search both first_name and last_name
+
             value = `${instructor.first_name || ''} ${instructor.last_name || ''}`.toLowerCase().trim();
         } else {
             value = (instructor[searchState.column] || "").toString().toLowerCase();
@@ -354,7 +354,7 @@ function renderTable() {
         return value.includes(searchState.query);
     });
 
-    // Show empty state if no data
+
     if (filteredData.length === 0) {
         tbody.innerHTML = "";
         emptyState.classList.remove("hidden");
@@ -364,13 +364,13 @@ function renderTable() {
         emptyState.classList.add("hidden");
     }
 
-    // Pagination calculations
+
     const totalPages = Math.ceil(filteredData.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
-    // Table rendering
+
     tbody.innerHTML = pageData.map((instructor, index) => {
         const fullName = `${instructor.first_name || ''} ${instructor.last_name || ''}`.trim();
         const initials = instructor.first_name && instructor.last_name ?
@@ -433,7 +433,7 @@ function renderTable() {
         `;
     }).join('');
 
-    // Add event listeners
+
     tbody.querySelectorAll('.view-instructor-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -449,13 +449,13 @@ function renderTable() {
                 const instructorId = btn.getAttribute('data-id');
                 const instructor = instructorsData.find(i => i.id === instructorId);
 
-                // CHANGE THIS: Use the class instance
+
                 if (instructor) instructorModal.show(instructor, fetchInstructors);
             });
         });
     }
 
-    // Row click to view profile
+
     tbody.querySelectorAll('tr').forEach(row => {
         row.addEventListener('click', () => {
             const instructorId = row.querySelector('.view-instructor-btn').getAttribute('data-id');
@@ -510,7 +510,7 @@ function renderPagination(totalPages) {
         `;
     }
 
-    // Show page numbers with ellipsis for many pages
+
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -573,13 +573,13 @@ function backupTableState() {
 function viewInstructorProfile(instructorId) {
     backupTableState();
 
-    // Use the new instructor details page
+
     window.location.hash = `#instructor/${instructorId}`;
     window.dispatchEvent(new CustomEvent('navigate', {
         detail: {
             page: 'instructordetails',
             instructorId,
-            backPage: 'instructors' // CHANGE: Add this line
+            backPage: 'instructors'
         }
     }));
 }
@@ -613,21 +613,21 @@ function toggleSort(column) {
                 return 0;
             }
 
-            // Handle numeric sorting for total_hours
+
             if (column === 'total_hours') {
                 const aVal = parseFloat(a[column]) || 0;
                 const bVal = parseFloat(b[column]) || 0;
                 return sortState.direction === "asc" ? aVal - bVal : bVal - aVal;
             }
 
-            // Handle date sorting for created_at
+
             if (column === 'created_at') {
                 const aDate = new Date(a[column]);
                 const bDate = new Date(b[column]);
                 return sortState.direction === "asc" ? aDate - bDate : bDate - aDate;
             }
 
-            // Default string sorting
+
             const aVal = (a[column] || "").toString().toLowerCase();
             const bVal = (b[column] || "").toString().toLowerCase();
             if (aVal < bVal) return sortState.direction === "asc" ? -1 : 1;

@@ -10,16 +10,16 @@ export class MaintenanceHistoryModal {
         this.planeId = null;
         this.planeTailNumber = "";
 
-        // Data Cache
+
         this.records = [];
 
-        // View State: 'list' or 'add'
+
         this.currentView = 'list';
 
-        // Picker Instance
+
         this.datePickerInstance = null;
 
-        // Bindings
+
         this.handleModalClick = this.handleModalClick.bind(this);
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
@@ -35,16 +35,16 @@ export class MaintenanceHistoryModal {
 
         this.planeId = planeId;
         this.planeTailNumber = tailNumber;
-        this.currentView = 'list'; // Always start on list view
+        this.currentView = 'list';
 
         this.render();
         this.isOpen = true;
 
-        // Animate Entry
+
         const modalContent = this.modal.querySelector('.bg-gray-900');
         setTimeout(() => {
             this.modal.classList.remove("hidden");
-            // Small delay to allow display:block to apply before opacity transition
+
             requestAnimationFrame(() => {
                 modalContent.classList.remove("scale-95", "opacity-0");
                 modalContent.classList.add("scale-100", "opacity-100");
@@ -68,7 +68,7 @@ export class MaintenanceHistoryModal {
             if (error) throw error;
 
             this.records = data || [];
-            this.renderList(); // Refresh the list view
+            this.renderList();
         } catch (error) {
             console.error('Error fetching maintenance:', error);
             showToast('Failed to load records: ' + error.message, 'error');
@@ -242,22 +242,22 @@ export class MaintenanceHistoryModal {
         this.modal.addEventListener('click', this.handleModalClick);
         document.addEventListener('keydown', this.handleEscapeKey);
 
-        // Close Button
+
         document.getElementById('close-maintenance-modal')?.addEventListener('click', () => this.close());
 
-        // Toggle View Button
+
         document.getElementById('toggle-view-btn')?.addEventListener('click', () => {
             this.toggleView(this.currentView === 'list' ? 'add' : 'list');
         });
 
-        // Form specific events
+
         document.getElementById('add-maintenance-form')?.addEventListener('submit', this.handleSubmit);
         document.getElementById('cancel-add-btn')?.addEventListener('click', () => this.toggleView('list'));
 
-        // Initialize Custom Date Picker if element exists
+
         const dateInput = document.getElementById('maint-date');
         if (dateInput) {
-            // Set default date to today
+
             dateInput.value = new Date().toISOString().split('T')[0];
             try {
                 this.datePickerInstance = new CustomDatePicker(dateInput);
@@ -290,7 +290,7 @@ export class MaintenanceHistoryModal {
             toggleBtn.classList.replace('bg-gray-600', 'bg-blue-600');
             toggleBtn.classList.replace('hover:bg-gray-500', 'hover:bg-blue-500');
 
-            // Cleanup form on navigate away
+
             document.getElementById('add-maintenance-form')?.reset();
         }
     }
@@ -316,8 +316,8 @@ export class MaintenanceHistoryModal {
         this.setLoading(true);
 
         try {
-            // NOTE: Assuming an RPC 'insert_maintenance_record' exists. 
-            // If not, standard Supabase insert: supabase.from('maintenance').insert(payload)
+
+
             const { error } = await supabase
                 .schema('api')
                 .rpc('insert_maintenance_record', { payload });
@@ -327,7 +327,7 @@ export class MaintenanceHistoryModal {
             showToast('Maintenance record added', 'success');
             document.getElementById('add-maintenance-form').reset();
             this.toggleView('list');
-            await this.fetchHistory(); // Refresh list
+            await this.fetchHistory();
 
         } catch (error) {
             console.error(error);
@@ -376,7 +376,7 @@ export class MaintenanceHistoryModal {
         this.modal?.removeEventListener('click', this.handleModalClick);
         document.removeEventListener('keydown', this.handleEscapeKey);
 
-        // Destroy picker
+
         if (this.datePickerInstance && typeof this.datePickerInstance.destroy === 'function') {
             this.datePickerInstance.destroy();
         }

@@ -19,11 +19,11 @@ export class AddFlightLogModal {
             arrival: null
         };
 
-        // Data storage
-        this.planes = [];
-        this.allPeople = []; // Unified list of all personnel
 
-        // Autocomplete instances (stored for cleanup)
+        this.planes = [];
+        this.allPeople = [];
+
+
         this.pilotAutocomplete = null;
         this.instructorAutocomplete = null;
 
@@ -38,7 +38,7 @@ export class AddFlightLogModal {
 
     async fetchData() {
         try {
-            // Using your new view-based RPCs
+
             const planesPromise = supabase.schema('api').rpc('get_plane_fleet');
             const personnelPromise = supabase.schema('api').rpc('get_members');
 
@@ -148,14 +148,14 @@ export class AddFlightLogModal {
             </div>
         `;
 
-        return /* html */ `
+        return `
             <style>
                 .scrollbar-hide::-webkit-scrollbar {
                     display: none;
                 }
                 .scrollbar-hide {
-                    -ms-overflow-style: none;  /* IE and Edge */
-                    scrollbar-width: none;  /* Firefox */
+                    -ms-overflow-style: none;  
+                    scrollbar-width: none;  
                 }
             </style>
             <div class="${isStandalone ? 'h-full flex flex-col' : 'bg-gray-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-700 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] overflow-hidden'}">
@@ -365,7 +365,7 @@ export class AddFlightLogModal {
         `;
     }
 
-    // Helper to extract numeric liters from text string (e.g., "+50L" -> 50)
+
     parseLiters(val) {
         if (!val) return 0;
         const match = val.toString().match(/(\d+(\.\d+)?)/);
@@ -373,7 +373,7 @@ export class AddFlightLogModal {
     }
 
     attachEvents() {
-        // Close modal events - only in modal mode
+
         if (!this.isStandalone) {
             this.modal.addEventListener('click', (e) => {
                 if (e.target === this.modal) {
@@ -494,7 +494,7 @@ export class AddFlightLogModal {
         if (departureIataEl) departureIataEl.value = "LFMD";
         if (arrivalIataEl) arrivalIataEl.value = "LFMD";
 
-        // Pre-fill Pilot
+
         if (params.pilotId) {
             const person = this.allPeople.find(p => p.id === params.pilotId);
             if (person) {
@@ -507,7 +507,7 @@ export class AddFlightLogModal {
         document.getElementById("engine-oil-departure").value = "0.00";
         document.getElementById("engine-oil-arrival").value = "0.00";
 
-        // Pre-fill Instructor
+
         if (params.instructorId) {
             const instructor = this.allPeople.find(i => i.id === params.instructorId);
             if (instructor) {
@@ -546,8 +546,8 @@ export class AddFlightLogModal {
 
         planeSelect.innerHTML = '<option value="">Select Plane</option>';
         this.planes.forEach(plane => {
-            // CHANGED: Access 'model_name' from the view instead of 'model'
-            // Added simple status indicator in text
+
+
             const statusIcon = plane.status === 'available' ? '🟢' : '🔴';
             planeSelect.innerHTML += `<option value="${plane.id}">
                  ${plane.tail_number} - ${plane.model_name || 'Unknown'}
@@ -556,20 +556,20 @@ export class AddFlightLogModal {
     }
 
     setupEventListeners() {
-        // --------------------------------------------------------------------------
-        // REVISITED AUTOCOMPLETE IMPLEMENTATION
-        // --------------------------------------------------------------------------
 
-        // 1. Pilot Autocomplete:
-        // Uses the new 'setupPersonAutocomplete' helper.
-        // Filters primarily for 'pilots' (students, regular pilots, instructors).
+
+
+
+
+
+
         this.pilotAutocomplete = setupPersonAutocomplete({
             inputId: "pilot-name",
             hiddenId: "pilot-uuid",
             peopleData: this.allPeople,
-            roleFilter: 'pilots', // Matches the switch case in autocomplete.js
+            roleFilter: 'pilots',
             onSelect: (selected) => {
-                // Specific logic: update captain signature
+
                 const captainPlaceholder = document.getElementById("captain-name-placeholder");
                 if (captainPlaceholder) {
                     captainPlaceholder.textContent = selected.value;
@@ -577,19 +577,19 @@ export class AddFlightLogModal {
             }
         });
 
-        // 2. Instructor Autocomplete:
-        // Uses the new 'setupPersonAutocomplete' helper.
-        // Filters strictly for 'instructors'.
+
+
+
         this.instructorAutocomplete = setupPersonAutocomplete({
             inputId: "instructor-name",
             hiddenId: "instructor-uuid",
             peopleData: this.allPeople,
-            roleFilter: 'instructors' // Matches the switch case in autocomplete.js
+            roleFilter: 'instructors'
         });
 
-        // --------------------------------------------------------------------------
 
-        // Update captain name placeholder when pilot name changes manually (fallback)
+
+
         const pilotNameInput = document.getElementById("pilot-name");
         const captainPlaceholder = document.getElementById("captain-name-placeholder");
 
@@ -599,7 +599,7 @@ export class AddFlightLogModal {
             });
         }
 
-        // Hour meter formatting
+
         if (document.getElementById("hour-meter-departure")) {
             this.setupHourMeterFormatting("hour-meter-departure");
         }
@@ -616,11 +616,11 @@ export class AddFlightLogModal {
                 const isHidden = fuelSection.classList.contains('hidden');
                 if (isHidden) {
                     fuelSection.classList.remove('hidden');
-                    // Rotate arrow up
+
                     if (fuelChevron) fuelChevron.classList.add('rotate-180');
                 } else {
                     fuelSection.classList.add('hidden');
-                    // Rotate arrow down
+
                     if (fuelChevron) fuelChevron.classList.remove('rotate-180');
                 }
             });
@@ -660,7 +660,7 @@ export class AddFlightLogModal {
             }
         });
 
-        // Oil fields
+
         const oilFields = [
             { id: 'engine-oil-departure', placeholder: '0.00' },
             { id: 'engine-oil-arrival', placeholder: '0.00' }
@@ -900,7 +900,7 @@ export class AddFlightLogModal {
             return false;
         }
 
-        // usage of this.parseLiters
+
         const fuelAdded = this.parseLiters(document.getElementById("fuel-departure").value) > 0 ||
             this.parseLiters(document.getElementById("fuel-arrival").value) > 0;
 
@@ -1015,7 +1015,7 @@ export class AddFlightLogModal {
                 arrival_time: arrivalDateTime,
                 flight_duration: parseFloat(document.getElementById("flight-duration-display").getAttribute('data-decimal-hours') || 0),
 
-                // CHANGED: We now parse the liters for stats, AND send the raw text for logs (if supported)
+
                 ffuel_added_departure_liters: this.parseLiters(fuelDepartureValue),
                 fuel_added_arrival_liters: this.parseLiters(fuelArrivalValue),
                 fuel_added_cost: fuelCostValue,
@@ -1048,9 +1048,9 @@ export class AddFlightLogModal {
 
         } catch (error) {
             console.error('Error submitting flight log:', error);
-            // CHANGED: Better error handling for Billing Errors
+
             if (error.message && error.message.includes("Billing Error")) {
-                showToast("⚠️ " + error.message, 'error'); // Distinct warning icon
+                showToast("⚠️ " + error.message, 'error');
             } else {
                 showToast('Error submitting flight log: ' + error.message, 'error');
             }
@@ -1149,7 +1149,7 @@ export class AddFlightLogModal {
 
         this.cleanupCustomPickers();
 
-        // Clean up autocomplete instances
+
         if (this.pilotAutocomplete && typeof this.pilotAutocomplete.destroy === 'function') {
             this.pilotAutocomplete.destroy();
             this.pilotAutocomplete = null;

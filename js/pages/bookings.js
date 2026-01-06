@@ -7,7 +7,7 @@ import { showToast } from "../components/showToast.js";
 import { CustomDatePicker } from "../components/customDatePicker.js";
 import { BookingCancelModal } from "../modals/BookingCancelModal.js";
 import { CustomWeekPicker } from "../components/customWeekPicker.js";
-import { Autocomplete } from "../components/autocomplete.js"; //
+import { Autocomplete } from "../components/autocomplete.js";
 import { getMembers } from "../utils/memberData.js";
 
 let currentDate = new Date();
@@ -16,17 +16,17 @@ let searchQuery = "";
 // Data Store
 let bookings = [];
 let planes = [];
-let students = []; // Populated from view_all_members
-let instructors = []; // Populated from view_all_members
-let allMembers = []; // Raw view data
-let allUsers = []; // Needed to bridge Booking(UserUUID) -> Person(PersonUUID)
-let userIdToPersonMap = {}; // Helper for O(1) lookups
+let students = [];
+let instructors = [];
+let allMembers = [];
+let allUsers = [];
+let userIdToPersonMap = {};
 
 let currentSearchType = "";
 let currentPlanePage = 0;
 const PLANES_PER_PAGE = 8;
-let searchAutocomplete = null; // Store the autocomplete instance
-let autocompleteData = []; // Cache for autocomplete entries
+let searchAutocomplete = null;
+let autocompleteData = [];
 
 const calendarStyles = `<style>
 .daily-grid-container,
@@ -39,7 +39,7 @@ const calendarStyles = `<style>
     overflow: auto;
 }
 
-/* HEADER */
+
 .grid-header {
     background: #374151;
     border-bottom: 1px solid #4b5563;
@@ -63,7 +63,7 @@ const calendarStyles = `<style>
     flex-shrink: 0;
 }
 
-/* BODY */
+
 .grid-body {
     flex: 1;
     overflow: auto;
@@ -101,7 +101,7 @@ const calendarStyles = `<style>
     position: relative;
 }
 
-/* --- DAILY VIEW: Hour grid lines --- */
+
 .time-grid::before {
     content: '';
     position: absolute;
@@ -121,9 +121,9 @@ const calendarStyles = `<style>
     z-index: 1;
 }
 
-/* --- WEEKLY VIEW CLEANUP --- */
+
 .weekly-grid-container .time-grid::before {
-    /* Keep hour separators, same as daily */
+    
     content: '';
     position: absolute;
     top: 0;
@@ -142,7 +142,7 @@ const calendarStyles = `<style>
     z-index: 1;
 }
 
-/* Only a thin line between days (rows) */
+
 .weekly-grid-container .plane-row {
     border-bottom: 1px solid #4b5563;
 }
@@ -156,7 +156,7 @@ const calendarStyles = `<style>
     outline: none !important;
 }
 
-/* --- BOOKINGS --- */
+
 .booking-slot {
     position: absolute;
     background: #3b82f6;
@@ -209,7 +209,7 @@ const calendarStyles = `<style>
     text-overflow: ellipsis;
 }
 
-/* --- CURRENT TIME LINE --- */
+
 .current-time-line {
     position: absolute;
     top: 40px;
@@ -230,7 +230,7 @@ const calendarStyles = `<style>
     border-radius: 50%;
 }
 
-/* --- SCROLLBAR --- */
+
 .grid-body::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -286,12 +286,12 @@ export async function loadBookingsPage() {
 
     if (!document.querySelector('#bookings-calendar-styles')) {
         const styleElement = document.createElement('div');
-        styleElement.id = 'bookings-calendar-styles'; // Added ID for cleanup check
+        styleElement.id = 'bookings-calendar-styles';
         styleElement.innerHTML = calendarStyles;
         document.head.appendChild(styleElement.firstElementChild);
     }
 
-    document.getElementById("main-content").innerHTML = /*html*/ `
+    document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col h-full text-white relative">
             <div class="flex justify-between items-center mb-6">
                 <div class="flex space-x-2">
@@ -425,23 +425,23 @@ export async function loadBookingsPage() {
 
 async function fetchData() {
     try {
-        // --- 1. Fetch Planes (RPC) ---
+
         const { data: planesData, error: planesError } = await supabase.schema('api').rpc('get_planes');
         if (planesError) throw planesError;
         planes = planesData || [];
 
-        // --- 2. Fetch Bookings (RPC) ---
+
         const { data: bookingsData, error: bookingsError } = await supabase.schema('api').rpc('get_bookings');
         if (bookingsError) throw bookingsError;
         bookings = bookingsData || [];
 
-        // --- 3. Fetch All Members (View) ---
+
         const { data: membersData, error: membersError } = await getMembers();
         if (membersError) throw membersError;
         allMembers = membersData || [];
 
-        // --- 4. Fetch Users (RPC - FIXED) ---
-        // REPLACED: generic 'get_users' (404) -> parallel 'get_users_by_role' calls (Supported)
+
+
         const roles = ['student', 'instructor', 'regular_pilot', 'maintenance_technician', 'other_person'];
         const userPromises = roles.map(role =>
             supabase.schema('api').rpc('get_users_by_role', { user_role: role })
@@ -449,10 +449,10 @@ async function fetchData() {
 
         const userResults = await Promise.all(userPromises);
 
-        // Flatten the results from all roles into one array
+
         allUsers = userResults.flatMap(r => r.data || []);
 
-        // --- 5. Build Identity Map ---
+
         userIdToPersonMap = {};
         allUsers.forEach(user => {
             const person = allMembers.find(m => m.id === user.person_id);
@@ -461,11 +461,11 @@ async function fetchData() {
             }
         });
 
-        // --- 6. Reconstruct Legacy Arrays ---
+
         students = allMembers.filter(m => m.type === 'student');
         instructors = allMembers.filter(m => m.type === 'instructor');
 
-        // --- 7. Update Autocomplete Data ---
+
         updateSearchAutocompleteData();
 
     } catch (error) {
@@ -477,14 +477,14 @@ async function fetchData() {
 function updateSearchAutocompleteData() {
     if (!searchAutocomplete) return;
 
-    // Reset and rebuild the cache
+
     autocompleteData = [];
 
-    // Planes
+
     planes.forEach(p => {
         if (p.tail_number) {
             autocompleteData.push({
-                id: p.id, // <--- REQUIRED by Autocomplete class
+                id: p.id,
                 label: p.tail_number,
                 type: null,
                 searchType: "Plane"
@@ -492,32 +492,32 @@ function updateSearchAutocompleteData() {
         }
     });
 
-    // Students (People)
+
     students.forEach(s => {
         autocompleteData.push({
-            id: s.id, // <--- REQUIRED
+            id: s.id,
             label: `${s.first_name} ${s.last_name}`,
             type: s.type,
             searchType: "Person"
         });
     });
 
-    // Instructors
+
     instructors.forEach(i => {
         autocompleteData.push({
-            id: i.id, // <--- REQUIRED
+            id: i.id,
             label: `${i.first_name} ${i.last_name}`,
             type: i.type,
             searchType: "Instructor"
         });
     });
 
-    // Pass the cached data to the component
+
     searchAutocomplete.updateData(autocompleteData);
 }
 
 function setupTableViewEvents() {
-    // View toggle buttons
+
     document.getElementById("schedule-view-btn").addEventListener("click", () => {
         tableView = false;
         document.getElementById("schedule-view").classList.remove("hidden");
@@ -539,7 +539,7 @@ function setupTableViewEvents() {
         renderTableView();
     });
 
-    // Table sorting
+
     document.querySelectorAll("#table-view th[data-column]").forEach(th => {
         th.addEventListener("click", () => {
             const column = th.getAttribute("data-column");
@@ -547,7 +547,7 @@ function setupTableViewEvents() {
         });
     });
 
-    // Table search
+
     document.getElementById("search-box").addEventListener("input", e => {
         searchState.query = e.target.value.toLowerCase();
         currentPage = 1;
@@ -560,7 +560,7 @@ function setupTableViewEvents() {
         renderTableView();
     });
 
-    // Time filter
+
     document.getElementById("time-filter").addEventListener("change", () => {
         currentPage = 1;
         renderTableView();
@@ -568,27 +568,27 @@ function setupTableViewEvents() {
 }
 
 function renderTableView() {
-    // --- PERMISSIONS FLAG ---
-    const canEdit = true; // Placeholder for future RLS
 
-    // Process bookings for table display
+    const canEdit = true;
+
+
     const timeFilter = document.getElementById("time-filter").value;
     const now = new Date();
 
     let tableData = bookings.map(booking => {
         const plane = planes.find(p => p.id === booking.plane_id);
 
-        // Resolve Instructor (UserID -> Person)
+
         const instructor = getPersonByUserId(booking.instructor_id);
 
-        // Resolve Pilot (UserID -> Person)
-        // Works for Student, Instructor, or Regular Pilot
+
+
         const pilot = getPersonByUserId(booking.pilot_id);
         const pilotName = pilot ? `${pilot.first_name} ${pilot.last_name}` : 'Unknown';
 
         const startTime = new Date(booking.start_time);
         const endTime = new Date(booking.end_time);
-        const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+        const duration = (endTime - startTime) / (1000 * 60 * 60);
 
         return {
             ...booking,
@@ -602,27 +602,27 @@ function renderTableView() {
         };
     });
 
-    // Apply time filter
+
     if (timeFilter === 'future') {
         tableData = tableData.filter(booking => booking.start_datetime > now);
     } else if (timeFilter === 'past') {
         tableData = tableData.filter(booking => booking.start_datetime <= now);
     }
 
-    // Filter by search
+
     let filteredData = tableData.filter(booking => {
         if (!searchState.query) return true;
         const value = (booking[searchState.column] || "").toString().toLowerCase();
         return value.includes(searchState.query);
     });
 
-    // Sort data
+
     if (sortState.direction !== "none") {
         filteredData.sort((a, b) => {
             let aVal = a[sortState.column];
             let bVal = b[sortState.column];
 
-            // Handle date sorting
+
             if (sortState.column === 'start_time') {
                 aVal = new Date(a.start_time).getTime();
                 bVal = new Date(b.start_time).getTime();
@@ -634,13 +634,13 @@ function renderTableView() {
         });
     }
 
-    // Pagination calculations
+
     const totalPages = Math.ceil(filteredData.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
-    // Render table
+
     const tbody = document.getElementById("bookings-table");
     tbody.innerHTML = pageData.map((booking, index) => `
     <tr class="${index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700'} hover:bg-gray-600 cursor-pointer" data-booking-id="${booking.id}">
@@ -664,7 +664,7 @@ function renderTableView() {
     </tr>
 `).join('');
 
-    // Add event listeners for actions
+
     tbody.querySelectorAll('.edit-booking').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -760,7 +760,7 @@ async function deleteBooking(bookingId) {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
-    // Get additional booking details for the modal
+
     const plane = planes.find(p => p.id === booking.plane_id);
     const instructor = getPersonByUserId(booking.instructor_id);
     const pilot = getPersonByUserId(booking.pilot_id);
@@ -779,7 +779,7 @@ async function deleteBooking(bookingId) {
     const modal = new BookingCancelModal({
         booking: bookingWithDetails,
         onConfirm: async (bookingToDelete) => {
-            // --- RPC CALL REPLACEMENT ---
+
             const { error } = await supabase.schema('api').rpc('delete_booking', {
                 booking_uuid: bookingToDelete.id
             });
@@ -808,17 +808,17 @@ async function deleteBooking(bookingId) {
 function setupSearchFunctionality() {
     const searchInput = document.getElementById("search-input");
 
-    // Initialize Autocomplete
+
     searchAutocomplete = new Autocomplete({
         inputElement: searchInput,
         dataSource: [],
         displayField: 'label',
-        valueField: 'id', // This matches the 'id' property we added above
+        valueField: 'id',
         placeholder: 'Search by plane, person, or instructor...',
 
         onSelect: (selection) => {
-            // 'selection' is { id, value, rawItem }
-            // We need to access .rawItem to get our specific fields
+
+
             const item = selection.rawItem;
 
             if (item) {
@@ -829,7 +829,7 @@ function setupSearchFunctionality() {
         },
 
         onInput: (value) => {
-            // Handle clearing
+
             if (!value || !value.trim()) {
                 searchQuery = "";
                 currentSearchType = "";
@@ -1056,7 +1056,7 @@ export async function cleanupBookingsPage() {
         datePickerInstance = null;
     }
 
-    // Cleanup Autocomplete
+
     if (searchAutocomplete) {
         searchAutocomplete.destroy();
         searchAutocomplete = null;
@@ -1179,7 +1179,7 @@ function openEditBookingModal(booking) {
         students,
         instructors,
         onSave: async (bookingData) => {
-            // --- RPC CALL REPLACEMENT ---
+
             const { error } = await supabase.schema('api').rpc('update_booking', {
                 booking_uuid: booking.id,
                 payload: bookingData
@@ -1436,8 +1436,8 @@ function renderPlaneBookings(planeId, dayBookings, dayStart, hourWidth) {
         const left = visibleStart * hourWidth;
         const width = duration * hourWidth;
 
-        // --- UPDATED RESOLUTION LOGIC ---
-        // Using userIdToPersonMap to resolve names efficiently
+
+
         const pilot = getPersonByUserId(booking.pilot_id);
         const instructor = getPersonByUserId(booking.instructor_id);
 
@@ -1477,7 +1477,7 @@ function renderDayBookings(dayIndex, dayStart, hourWidth) {
     if (searchQuery && currentSearchType) {
         rowBookings = rowBookings.filter(booking => {
             const plane = planes.find(p => p.id === booking.plane_id);
-            // Updated resolution
+
             const instructor = getPersonByUserId(booking.instructor_id);
             const pilot = getPersonByUserId(booking.pilot_id);
             const pilotName = pilot ? `${pilot.first_name} ${pilot.last_name}` : '';
@@ -1510,7 +1510,7 @@ function renderDayBookings(dayIndex, dayStart, hourWidth) {
         const left = visibleStart * hourWidth;
         const width = duration * hourWidth;
 
-        // --- UPDATED RESOLUTION LOGIC ---
+
         const plane = planes.find(p => p.id === booking.plane_id);
         const instructor = getPersonByUserId(booking.instructor_id);
         const pilot = getPersonByUserId(booking.pilot_id);

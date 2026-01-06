@@ -31,12 +31,12 @@ export class AddMemberModal {
 
         document.body.appendChild(this.modal);
 
-        // Initial render (Default role: Student)
+
         this.renderDynamicFields('student');
     }
 
     getModalHTML() {
-        return /*html*/`
+        return `
             <div class="bg-gray-900 text-white rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700 transform transition-all duration-300 scale-95 opacity-0 flex flex-col max-h-[90vh]">
                 
                 <div class="flex justify-between items-center p-6 border-b border-gray-700">
@@ -120,21 +120,21 @@ export class AddMemberModal {
             mouseDownTarget = null;
         });
 
-        // Role Change
+
         roleSelect.addEventListener('change', (e) => {
             this.currentRole = e.target.value;
             this.renderDynamicFields(this.currentRole);
 
-            // CHANGED: Toggle Email Requirement
+
             const emailInput = this.modal.querySelector('input[name="email"]');
             const emailLabel = this.modal.querySelector('#amm-email-label');
 
             if (this.currentRole === 'other_person') {
                 emailInput.removeAttribute('required');
-                emailLabel.textContent = "Email (Not Required)"; // Remove asterisk
+                emailLabel.textContent = "Email (Not Required)";
             } else {
                 emailInput.setAttribute('required', '');
-                emailLabel.textContent = "Email *"; // Add asterisk
+                emailLabel.textContent = "Email *";
             }
         });
 
@@ -144,7 +144,7 @@ export class AddMemberModal {
         });
     }
 
-    handleBackdropClick(e) { /* handled inline in attachEvents now */ }
+    handleBackdropClick(e) { }
 
     handleEscKey(e) {
         if (e.key === 'Escape' && !this.modal.classList.contains('hidden')) {
@@ -254,7 +254,7 @@ export class AddMemberModal {
             let response = null;
             let payload = {};
 
-            // 1. PREPARE PAYLOAD & INSERT RECORD
+
             if (this.currentRole === 'student') {
                 payload = {
                     first_name: data.first_name,
@@ -312,13 +312,13 @@ export class AddMemberModal {
                 throw response.error;
             }
 
-            // 2. SEND INVITE EMAIL (The Fix)
-            // We only send the email if the payload actually had an email address
-            // (e.g., 'other_person' might not have one)
+
+
+
             if (payload.email) {
                 try {
                     const { error: resetError } = await supabase.auth.resetPasswordForEmail(payload.email, {
-                        // Dynamically sets URL to your current domain
+
                         redirectTo: window.location.origin + '/update-password.html'
                     });
 
@@ -330,11 +330,11 @@ export class AddMemberModal {
                     }
                 } catch (emailErr) {
                     console.error("Unexpected email error:", emailErr);
-                    // We treat this as a warning, not an error, because the user WAS created in DB
+
                     showToast("Member created, but invite email system failed.", "warning");
                 }
             } else {
-                // Success message for users without email (e.g. some 'other_person' entries)
+
                 showToast('Member created successfully!', 'success');
             }
 
@@ -390,14 +390,14 @@ export class AddMemberModal {
 
             this.cleanupCustomPickers();
 
-            // RESET: Role to student + Email required again for next time
+
             this.modal.querySelector('#amm-form').reset();
             const roleSelect = this.modal.querySelector('#amm-role');
             roleSelect.value = 'student';
             this.currentRole = 'student';
             this.renderDynamicFields('student');
 
-            // Ensure email is required again
+
             const emailInput = this.modal.querySelector('input[name="email"]');
             const emailLabel = this.modal.querySelector('#amm-email-label');
             emailInput.setAttribute('required', '');

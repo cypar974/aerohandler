@@ -12,14 +12,14 @@ let currentDate = new Date();
 let searchQuery = "";
 let flightLogs = [];
 let planes = [];
-let students = []; // Populated via 
-let instructors = []; // Populated via 
-let allMembers = []; // Raw view data
-let userMap = new Map(); // Maps User UUID -> Person Data
+let students = [];
+let instructors = [];
+let allMembers = [];
+let userMap = new Map();
 let currentSearchType = "";
 let currentPlanePage = 0;
 const PLANES_PER_PAGE = 8;
-let searchAutocomplete = null; // Store autocomplete instance
+let searchAutocomplete = null;
 
 let easaAutocomplete = null;
 let selectedEasaPlaneId = null;
@@ -44,7 +44,7 @@ const calendarStyles = `<style>
     overflow: auto;
 }
 
-/* HEADER */
+
 .grid-header {
     background: #374151;
     border-bottom: 1px solid #4b5563;
@@ -68,7 +68,7 @@ const calendarStyles = `<style>
     flex-shrink: 0;
 }
 
-/* BODY */
+
 .grid-body {
     flex: 1;
     overflow: auto;
@@ -106,7 +106,7 @@ const calendarStyles = `<style>
     position: relative;
 }
 
-/* --- DAILY VIEW: Hour grid lines --- */
+
 .time-grid::before {
     content: '';
     position: absolute;
@@ -126,9 +126,9 @@ const calendarStyles = `<style>
     z-index: 1;
 }
 
-/* --- WEEKLY VIEW CLEANUP --- */
+
 .weekly-grid-container .time-grid::before {
-    /* Keep hour separators, same as daily */
+    
     content: '';
     position: absolute;
     top: 0;
@@ -147,7 +147,7 @@ const calendarStyles = `<style>
     z-index: 1;
 }
 
-/* Only a thin line between days (rows) */
+
 .weekly-grid-container .plane-row {
     border-bottom: 1px solid #4b5563;
 }
@@ -161,7 +161,7 @@ const calendarStyles = `<style>
     outline: none !important;
 }
 
-/* --- FLIGHT LOGS --- */
+
 .flight-slot {
     position: absolute;
     border-radius: 4px;
@@ -212,7 +212,7 @@ const calendarStyles = `<style>
     text-overflow: ellipsis;
 }
 
-/* Flight type colors */
+
 .flight-p { background: #3b82f6; border-color: #2563eb; }
 .flight-ep-i { background: #10b981; border-color: #059669; }
 .flight-ep-fe { background: #f59e0b; border-color: #d97706; }
@@ -221,7 +221,7 @@ const calendarStyles = `<style>
 .flight-ferry { background: #ec4899; border-color: #db2777; }
 .flight-other { background: #6366f1; border-color: #4f46e5; }
 
-/* --- CURRENT TIME LINE --- */
+
 .current-time-line {
     position: absolute;
     top: 40px;
@@ -242,7 +242,7 @@ const calendarStyles = `<style>
     border-radius: 50%;
 }
 
-/* --- SCROLLBAR --- */
+
 .grid-body::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -297,7 +297,7 @@ export async function loadFlightLogsPage() {
         document.head.appendChild(styleElement.firstElementChild);
     }
 
-    document.getElementById("main-content").innerHTML = /*html*/ `
+    document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col h-full text-white relative">
             <div class="flex justify-between items-center mb-6">
                 <div class="flex space-x-2">
@@ -442,7 +442,7 @@ export async function loadFlightLogsPage() {
     setupPagination();
 
     await fetchData();
-    setupSearchFunctionality(); // Setup Autocomplete after data is loaded
+    setupSearchFunctionality();
     renderSchedule();
     renderTableView();
 
@@ -455,18 +455,18 @@ function resolveUser(userUuid) {
     const userData = userMap.get(userUuid);
     if (!userData) return null;
 
-    // userData.person_id -> look up in allMembers
+
     return allMembers.find(m => m.id === userData.person_id);
 }
 
 async function fetchData() {
     try {
-        // Use RPC functions and Views as per strict rules
+
         const [planesResponse, membersResponse, usersResponse, flightLogsResponse] = await Promise.all([
-            supabase.schema('api').rpc('get_planes'), // RPC
+            supabase.schema('api').rpc('get_planes'),
             getMembers(),
-            supabase.schema('api').rpc('get_users'), // Need users to map UUID -> Person ID
-            supabase.schema('api').rpc('get_flight_logs') // RPC
+            supabase.schema('api').rpc('get_users'),
+            supabase.schema('api').rpc('get_flight_logs')
         ]);
 
         if (planesResponse.error) throw planesResponse.error;
@@ -479,11 +479,11 @@ async function fetchData() {
         flightLogs = flightLogsResponse.data || [];
         const users = usersResponse.data || [];
 
-        // Create User Map: User UUID -> User Object (containing person_id)
+
         userMap.clear();
         users.forEach(u => userMap.set(u.id, u));
 
-        // Filter members for legacy variable support (preserving existing logic structure)
+
         students = allMembers.filter(m => m.type === 'student');
         instructors = allMembers.filter(m => m.type === 'instructor');
 
@@ -494,7 +494,7 @@ async function fetchData() {
 }
 
 function setupTableViewEvents() {
-    // --- 1. View Navigation (Tabs) ---
+
     const scheduleBtn = document.getElementById("schedule-view-btn");
     const tableBtn = document.getElementById("table-view-btn");
     const easaBtn = document.getElementById("easa-view-btn");
@@ -503,9 +503,9 @@ function setupTableViewEvents() {
     const tableDiv = document.getElementById("table-view");
     const easaDiv = document.getElementById("easa-view");
 
-    // Helper to handle tab switching
+
     function setActiveTab(activeBtn, activeDiv) {
-        // Reset all buttons to inactive style
+
         [scheduleBtn, tableBtn, easaBtn].forEach(btn => {
             if (btn) {
                 btn.classList.remove("bg-blue-600");
@@ -513,12 +513,12 @@ function setupTableViewEvents() {
             }
         });
 
-        // Hide all content areas
+
         [scheduleDiv, tableDiv, easaDiv].forEach(div => {
             if (div) div.classList.add("hidden");
         });
 
-        // Set active state
+
         if (activeBtn) {
             activeBtn.classList.remove("bg-gray-700");
             activeBtn.classList.add("bg-blue-600");
@@ -528,7 +528,7 @@ function setupTableViewEvents() {
         }
     }
 
-    // Schedule View Click
+
     if (scheduleBtn) {
         scheduleBtn.addEventListener("click", () => {
             tableView = false;
@@ -536,7 +536,7 @@ function setupTableViewEvents() {
         });
     }
 
-    // Table View Click
+
     if (tableBtn) {
         tableBtn.addEventListener("click", () => {
             tableView = true;
@@ -545,22 +545,22 @@ function setupTableViewEvents() {
         });
     }
 
-    // EASA View Click (New)
+
     if (easaBtn) {
         easaBtn.addEventListener("click", () => {
-            // EASA view is technically not the "Table View" mode used for pagination
-            // but we don't strictly set tableView = false to avoid re-rendering schedule unnecessarily
+
+
             setActiveTab(easaBtn, easaDiv);
 
-            // Initialize the autocomplete specific to this view
-            // (Defined in the previous step)
+
+
             if (typeof setupEasaSearch === 'function') {
                 setupEasaSearch();
             }
         });
     }
 
-    // --- 2. Table Sorting Events ---
+
     document.querySelectorAll("#table-view th[data-column]").forEach(th => {
         th.addEventListener("click", () => {
             const column = th.getAttribute("data-column");
@@ -568,7 +568,7 @@ function setupTableViewEvents() {
         });
     });
 
-    // --- 3. Table Search Events ---
+
     const searchBox = document.getElementById("search-box");
     if (searchBox) {
         searchBox.addEventListener("input", e => {
@@ -590,13 +590,13 @@ function setupTableViewEvents() {
 
 function setupEasaSearch() {
     const inputElement = document.getElementById("easa-plane-search");
-    if (!inputElement || easaAutocomplete) return; // Prevent double init
+    if (!inputElement || easaAutocomplete) return;
 
-    // Format Plane Data for Autocomplete
+
     const planeData = planes.map(p => ({
         id: p.id,
         name: p.tail_number,
-        type: 'plane', // Custom type
+        type: 'plane',
         searchCategory: 'Plane'
     }));
 
@@ -627,7 +627,7 @@ function renderEasaView(planeId) {
     const container = document.getElementById("easa-content-area");
     const plane = planes.find(p => p.id === planeId);
 
-    // Filter and Sort: specific plane, oldest to newest (logbook style)
+
     const logs = flightLogs
         .filter(f => f.plane_id === planeId)
         .sort((a, b) => new Date(a.flight_date) - new Date(b.flight_date));
@@ -637,24 +637,24 @@ function renderEasaView(planeId) {
         return;
     }
 
-    // CSS for the print-like table
+
     const tableStyle = `
         <style>
             .easa-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 11px; }
             .easa-table th, .easa-table td { border: 1px solid #000; padding: 4px; }
             .easa-table th { background-color: #f0f0f0; text-align: center; font-weight: bold; }
             .easa-header-main { background-color: #e0e0e0; }
-            /* Split view simulation */
+            
             .page-separator { border-left: 4px double #000 !important; }
         </style>
     `;
 
     let rowsHtml = logs.map(flight => {
-        // 1. Date (DD/MM/YY)
+
         const dateObj = new Date(flight.flight_date);
         const dateStr = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getFullYear()).slice(-2)}`;
 
-        // 2. Names (Last Names only per EASA logbook usually, but prompt asks for Family Name)
+
         const pilot = resolveUser(flight.pilot_uuid);
         const instructor = resolveUser(flight.instructor_uuid);
         let names = pilot ? pilot.last_name.toUpperCase() : "UNKNOWN";
@@ -662,20 +662,20 @@ function renderEasaView(planeId) {
             names += ` / ${instructor.last_name.toUpperCase()}`;
         }
 
-        // 3. Function (Strict Mapping)
+
         let functionCode = "";
-        const type = flight.type_of_flight; // 'P', 'EPI', 'EPFE', 'PI'
+        const type = flight.type_of_flight;
         if (type === 'P') functionCode = "P";
         else if (type === 'EPI') functionCode = "EP / I";
         else if (type === 'EPFE') functionCode = "EP / FE";
         else if (type === 'PI') functionCode = "P / I";
-        else functionCode = type; // Fallback
+        else functionCode = type;
 
-        // 4. Place
+
         const depPlace = flight.departure_icao;
         const arrPlace = flight.arrival_icao;
 
-        // 5. Time UTC (HH:mm)
+
         const formatTime = (isoString) => {
             if (!isoString) return "";
             const d = new Date(isoString);
@@ -684,7 +684,7 @@ function renderEasaView(planeId) {
         const depTime = formatTime(flight.departure_time);
         const arrTime = formatTime(flight.arrival_time);
 
-        // 6. Flight Time (h'mm) ex: 0h54
+
         let durationStr = "0h00";
         if (flight.flight_duration) {
             const hours = Math.floor(flight.flight_duration);
@@ -692,39 +692,39 @@ function renderEasaView(planeId) {
             durationStr = `${hours}h${String(minutes).padStart(2, '0')}`;
         }
 
-        // 7. Nature (Instruction or Privé)
-        // Map 'nav', 'loc', 'pat' or 'flight_type' to Nature? 
-        // Logic: If Instructor present OR type is student -> Instruction, else Privé
+
+
+
         let nature = "Privé";
         if (['EPI', 'EPFE', 'PI'].includes(type) || instructor) {
             nature = "Instruction";
         }
 
-        // 8. Fuel (Added + PP/PC)
-        // Prefer text fields if available (as they might contain user's "PP" note), else format liters
+
+
         let fuelStr = "-";
         const totalLiters = (parseFloat(flight.fuel_added_departure_liters) || 0) + (parseFloat(flight.fuel_added_arrival_liters) || 0);
 
-        // Check if there is text annotation in the source fields (we don't have them in JS model yet, usually just liters)
-        // Based on available JS data in flightLogs (from full_sql.sql):
-        // fuel_added_departure (text), fuel_added_arrival (text) ARE in the table but might not be in JS object if RPC didn't return them.
-        // Assuming the RPC returns `SELECT *`, we check the text fields.
+
+
+
+
         const depText = flight.fuel_added_departure || "";
         const arrText = flight.fuel_added_arrival || "";
 
         if (depText || arrText) {
-            // Combine text if both exist
+
             fuelStr = `${depText} ${arrText}`.trim();
         } else if (totalLiters > 0) {
-            // Fallback formatting if user didn't write text but entered numbers
+
             fuelStr = `+${totalLiters}l`;
         }
 
-        // 9. Oil
+
         const oilTotal = (parseFloat(flight.engine_oil_added_departure) || 0) + (parseFloat(flight.engine_oil_added_arrival) || 0);
         const oilStr = oilTotal > 0 ? `${oilTotal}l` : "-";
 
-        // 10. Observations
+
         const obs = flight.incidents_or_observations || "";
 
         return `
@@ -783,24 +783,24 @@ function renderEasaView(planeId) {
 }
 
 function renderTableView() {
-    // --- DEMO MODE ---
-    const canManage = true;
-    // -----------------
 
-    // Process flight logs for table display
+    const canManage = true;
+
+
+
     const now = new Date();
 
     let tableData = flightLogs.map(flight => {
         const plane = planes.find(p => p.id === flight.plane_id);
 
-        // Resolve people using the new User Map logic
+
         const pilotDetails = resolveUser(flight.pilot_uuid);
         const instructorDetails = resolveUser(flight.instructor_uuid);
 
         const flightDate = new Date(flight.flight_date);
 
-        // Convert SQL Enum to display format or keep as is
-        // SQL values: EPI, EPFE, PI, P, etc.
+
+
         const flightTypeDisplay = flight.type_of_flight;
 
         return {
@@ -818,7 +818,7 @@ function renderTableView() {
         };
     });
 
-    // Filter by search
+
     let filteredData = tableData.filter(flight => {
         if (!searchState.query) return true;
 
@@ -832,13 +832,13 @@ function renderTableView() {
         return value.includes(searchState.query);
     });
 
-    // Sort data
+
     if (sortState.direction !== "none") {
         filteredData.sort((a, b) => {
             let aVal = a[sortState.column];
             let bVal = b[sortState.column];
 
-            // Handle date sorting
+
             if (sortState.column === 'flight_date') {
                 aVal = new Date(a.flight_date).getTime();
                 bVal = new Date(b.flight_date).getTime();
@@ -850,16 +850,16 @@ function renderTableView() {
         });
     }
 
-    // Pagination calculations
+
     const totalPages = Math.ceil(filteredData.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
-    // Render table
+
     const tbody = document.getElementById("flight-logs-table");
     tbody.innerHTML = pageData.map((flight, index) => {
-        // Map SQL enum to old CSS class
+
         const cssClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
         return `
@@ -888,7 +888,7 @@ function renderTableView() {
         `;
     }).join('');
 
-    // Add event listeners for actions
+
     tbody.querySelectorAll('.view-flight').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -897,7 +897,7 @@ function renderTableView() {
         });
     });
 
-    // Row click handler for viewing flight details
+
     tbody.addEventListener('click', (e) => {
         const row = e.target.closest('tr[data-flight-id]');
         if (row && !e.target.closest('.view-flight')) {
@@ -983,30 +983,30 @@ function setupSearchFunctionality() {
         searchAutocomplete.destroy();
     }
 
-    // Prepare unified data source for the autocomplete
-    // 1. Planes: Map tail_number to name. Leave 'type' undefined to avoid 'User' badge (or set custom)
+
+
     const planeData = planes.map(p => ({
         id: p.id,
         name: p.tail_number,
-        searchCategory: 'Plane', // Helper for onSelect logic
-        // We leave 'type' undefined so Autocomplete.getItemType falls back gracefully (or returns 'User' based on firstName presence, 
-        // but since we only have name/tail_number, it should be clean).
-        // Alternatively, if we want a badge, we can set type: 'student' (mapped to Student) etc, but 'Plane' isn't in the enum list in Autocomplete.
+        searchCategory: 'Plane',
+
+
+
     }));
 
-    // 2. Instructors
+
     const instructorData = instructors.map(i => ({
         id: i.id,
         name: `${i.first_name} ${i.last_name}`,
-        type: 'instructor', // Matches Autocomplete enum
+        type: 'instructor',
         searchCategory: 'Instructor'
     }));
 
-    // 3. Pilots (Students + others)
+
     const pilotData = students.map(s => ({
         id: s.id,
         name: `${s.first_name} ${s.last_name}`,
-        type: s.type, // 'student', 'regular_pilot', etc.
+        type: s.type,
         searchCategory: 'Pilot'
     }));
 
@@ -1020,21 +1020,21 @@ function setupSearchFunctionality() {
         valueField: 'id',
         placeholder: 'Search by plane, pilot, or instructor...',
 
-        // CHANGE THIS SECTION
+
         onSelect: (selection) => {
-            // Extract the actual data object from the selection wrapper
+
             const item = selection.rawItem;
 
             if (item) {
-                // Update the search state
+
                 searchQuery = item.name;
-                // Map the item to the categories expected by renderSchedule logic
+
                 currentSearchType = item.searchCategory;
                 renderSchedule();
             }
         },
         onInput: (query) => {
-            // If cleared, reset search
+
             if (!query.trim()) {
                 searchQuery = "";
                 currentSearchType = "";
@@ -1082,7 +1082,7 @@ function setupDateNavigation() {
         renderSchedule();
     });
 
-    // Today button event listener
+
     document.getElementById("today-btn").addEventListener("click", () => {
         currentDate = new Date();
         updateDateInputValue();
@@ -1090,7 +1090,7 @@ function setupDateNavigation() {
         renderSchedule();
     });
 
-    // This Week button event listener
+
     document.getElementById("this-week-btn").addEventListener("click", () => {
         currentDate = getMonday(new Date());
         updateDateInputValue();
@@ -1098,7 +1098,7 @@ function setupDateNavigation() {
         renderSchedule();
     });
 
-    // Initialize the appropriate date picker
+
     const dateInput = document.getElementById("current-date");
     updateDateInputValue();
     updateNavigationButtons();
@@ -1109,7 +1109,7 @@ function setupDateNavigation() {
         datePickerInstance = new CustomDatePicker(dateInput);
     }
 
-    // Handle date changes from the picker
+
     const originalSelectDate = datePickerInstance.selectDate?.bind(datePickerInstance);
     if (originalSelectDate) {
         datePickerInstance.selectDate = (dateString) => {
@@ -1277,12 +1277,12 @@ export async function cleanupFlightLogsPage() {
         searchAutocomplete = null;
     }
 
-    // Clean up all modal instances with proper destruction
+
     if (FlightDetailsModal.cleanupAll) {
         FlightDetailsModal.cleanupAll();
     }
 
-    // Clean up active modal if exists using destroy()
+
     if (activeModal) {
         if (typeof activeModal.destroy === 'function') {
             activeModal.destroy();
@@ -1292,34 +1292,34 @@ export async function cleanupFlightLogsPage() {
         activeModal = null;
     }
 
-    // Clean up the time interval
+
     if (window.currentTimeInterval) {
         clearInterval(window.currentTimeInterval);
         window.currentTimeInterval = null;
     }
 
-    // Clear any pending cleanup timeouts
+
     if (modalCleanupTimeout) {
         clearTimeout(modalCleanupTimeout);
         modalCleanupTimeout = null;
     }
 
-    // Clear flight modal timeout
+
     if (window.flightModalTimeout) {
         clearTimeout(window.flightModalTimeout);
         window.flightModalTimeout = null;
     }
 
-    // Reset closing flag
+
     window.isClosingModal = false;
 
-    // Remove event listeners from main content
+
     const mainContent = document.getElementById("main-content");
     if (mainContent) {
         mainContent.innerHTML = "";
     }
 
-    // Remove global event listeners
+
     window.removeEventListener('beforeunload', cleanupFlightLogsPage);
 }
 
@@ -1341,17 +1341,17 @@ function closeActiveModal() {
         return;
     }
 
-    // Clean up all flight detail modals first
+
     if (FlightDetailsModal.cleanupAll) {
         FlightDetailsModal.cleanupAll();
     }
 
-    // Then close the active modal instance with proper cleanup
+
     if (activeModal) {
         const modalToClose = activeModal;
         activeModal = null;
 
-        // Use destroy() method if available for complete cleanup
+
         if (typeof modalToClose.destroy === 'function') {
             console.log('🧹 Destroying modal with custom pickers...');
             modalToClose.destroy();
@@ -1362,13 +1362,13 @@ function closeActiveModal() {
         }
     }
 
-    // Clear any pending timeouts
+
     if (window.flightModalTimeout) {
         clearTimeout(window.flightModalTimeout);
         window.flightModalTimeout = null;
     }
 
-    // Reset the closing flag after a short delay
+
     setTimeout(() => {
         window.isClosingModal = false;
     }, 150);
@@ -1377,19 +1377,19 @@ function closeActiveModal() {
 function openAddFlightLogModal() {
     console.log('➕ openAddFlightLogModal called');
 
-    // Close any active modal with proper cleanup
+
     closeActiveModal();
 
-    // Give enough time for cleanup before creating new modal
+
     setTimeout(() => {
         createAddFlightLogModal();
-    }, 200); // Increased timeout to ensure complete cleanup
+    }, 200);
 }
 
 function createAddFlightLogModal() {
     console.log('🛠️ Creating FRESH AddFlightLogModal instance...');
 
-    // Ensure any previous modal is completely destroyed
+
     if (activeModal && typeof activeModal.destroy === 'function') {
         activeModal.destroy();
         activeModal = null;
@@ -1397,7 +1397,7 @@ function createAddFlightLogModal() {
 
     const modal = new AddFlightLogModal();
 
-    // Initialize the modal first before showing it
+
     modal.init().then(() => {
         modal.onSuccess(async (newFlight) => {
             console.log('✅ Flight log created successfully:', newFlight);
@@ -1418,11 +1418,11 @@ function createAddFlightLogModal() {
 
         activeModal = modal;
 
-        // Now show the modal after initialization is complete
+
         modal.show().catch(error => {
             console.error('Failed to show AddFlightLogModal:', error);
             showToast('Error opening flight log form: ' + error.message, 'error');
-            // Ensure modal is cleaned up even if show fails
+
             closeActiveModal();
         });
     }).catch(error => {
@@ -1462,9 +1462,9 @@ function viewFlight(flightId) {
 }
 
 function renderSchedule() {
-    // --- DEMO MODE ---
+
     const canManage = true;
-    // -----------------
+
 
     const scheduleContainer = document.getElementById("schedule-container");
     if (!scheduleContainer) return;
@@ -1474,7 +1474,7 @@ function renderSchedule() {
     const titleEl = document.getElementById("schedule-title");
     const pagination = document.getElementById("pagination-controls");
 
-    // Clean up existing date picker
+
     if (datePickerInstance) {
         datePickerInstance.destroy();
         datePickerInstance = null;
@@ -1492,7 +1492,7 @@ function renderSchedule() {
         titleEl.textContent = "Flight Schedule –";
     }
 
-    // Reinitialize the appropriate date picker
+
     const dateInput = document.getElementById("current-date");
     if (searchQuery) {
         datePickerInstance = new CustomWeekPicker(dateInput);
@@ -1500,7 +1500,7 @@ function renderSchedule() {
         datePickerInstance = new CustomDatePicker(dateInput);
     }
 
-    // Set up the date change handler
+
     const originalSelectDate = datePickerInstance.selectDate?.bind(datePickerInstance);
     if (originalSelectDate) {
         datePickerInstance.selectDate = (dateString) => {
@@ -1521,19 +1521,19 @@ function renderSchedule() {
 function renderDailyGrid(container) {
     const planesToShow = planes.slice(currentPlanePage * PLANES_PER_PAGE, (currentPlanePage + 1) * PLANES_PER_PAGE);
 
-    // Calculate time range for the day - from 6:00 AM to 10:00 PM (22:00)
+
     const dayStart = new Date(currentDate);
     dayStart.setHours(6, 0, 0, 0);
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(22, 0, 0, 0);
 
-    // Filter flights for this day
+
     const dayFlights = flightLogs.filter(flight => {
         const flightDate = new Date(flight.flight_date);
         return flightDate.toDateString() === currentDate.toDateString();
     });
 
-    // Fixed dimensions - show 6:00 to 22:00 but only display labels up to 21:00
+
     const PLANE_COLUMN_WIDTH = 120;
     const TOTAL_HOURS = 16;
     const HOUR_WIDTH = 80;
@@ -1594,7 +1594,7 @@ function renderWeeklyGrid(container) {
         return end;
     });
 
-    // Filter flights that occur during the week
+
     const weekFlights = flightLogs.filter(flight => {
         const flightDate = new Date(flight.flight_date);
         return days.some(day => flightDate.toDateString() === day.toDateString());
@@ -1642,7 +1642,7 @@ function renderPlaneFlights(planeId, dayFlights, dayStart, hourWidth) {
     const planeFlights = dayFlights.filter(flight => flight.plane_id === planeId);
 
     return planeFlights.map(flight => {
-        // Calculate position based on departure time
+
         const depTime = new Date(flight.departure_time);
         const arrTime = new Date(flight.arrival_time);
         const depHours = depTime.getHours();
@@ -1657,7 +1657,7 @@ function renderPlaneFlights(planeId, dayFlights, dayStart, hourWidth) {
         const left = startHours * hourWidth;
         const width = duration * hourWidth;
 
-        // Get flight details via Map (Using resolveUser logic)
+
         const instructor = resolveUser(flight.instructor_uuid);
         const pilotDetails = resolveUser(flight.pilot_uuid);
 
@@ -1667,7 +1667,7 @@ function renderPlaneFlights(planeId, dayFlights, dayStart, hourWidth) {
         const instructorName = instructor ?
             `${instructor.first_name} ${instructor.last_name}` : "-";
 
-        // Use helper map for CSS classes based on SQL Enum
+
         const flightTypeClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
         if (width <= 0) return '';
@@ -1690,13 +1690,13 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
     const day = new Date(dayStart);
     day.setHours(0, 0, 0, 0);
 
-    // Filter flights for this specific day
+
     let rowFlights = flightLogs.filter(flight => {
         const flightDate = new Date(flight.flight_date);
         return flightDate.toDateString() === day.toDateString();
     });
 
-    // Apply search filter based on search type
+
     if (searchQuery && currentSearchType) {
         rowFlights = rowFlights.filter(flight => {
             const plane = planes.find(p => p.id === flight.plane_id);
@@ -1722,7 +1722,7 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
     }
 
     return rowFlights.map(flight => {
-        // Calculate position based on departure time
+
         const depTime = new Date(flight.departure_time);
         const arrTime = new Date(flight.arrival_time);
         const depHours = depTime.getHours();
@@ -1737,7 +1737,7 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
         const left = startHours * hourWidth;
         const width = duration * hourWidth;
 
-        // Get flight details
+
         const plane = planes.find(p => p.id === flight.plane_id);
         const instructor = resolveUser(flight.instructor_uuid);
         const pilotDetails = resolveUser(flight.pilot_uuid);
@@ -1745,10 +1745,10 @@ function renderDayFlights(dayIndex, dayStart, hourWidth) {
         const pilotName = pilotDetails ?
             `${pilotDetails.first_name} ${pilotDetails.last_name}` : 'Unknown';
 
-        // Use helper map for CSS classes
+
         const flightTypeClass = flightTypeCssMap[flight.type_of_flight] || 'flight-other';
 
-        // Determine what to display based on search type
+
         let firstLine = '';
         let secondLine = '';
 
@@ -1800,10 +1800,10 @@ function renderCurrentTimeLine(dayStart, hourWidth) {
 
     const currentHours = (now - dayStart) / (1000 * 60 * 60);
 
-    // Apply the 1.5 hour offset to fix positioning
+
     const adjustedHours = currentHours + 1.5;
 
-    // Check if current time is within the adjusted visible range
+
     if (adjustedHours >= 0 && adjustedHours <= 17.5) {
         const left = adjustedHours * hourWidth;
 

@@ -10,25 +10,25 @@ export class EditBookingModal {
     constructor(config = {}) {
         console.log('🔧 EditBookingModal constructor called');
 
-        // Static counter to track instances
+
         if (!EditBookingModal.instanceCount) EditBookingModal.instanceCount = 0;
         EditBookingModal.instanceCount++;
 
         this.cleanupExistingModals();
 
-        // Config & State
+
         this.booking = config.booking || null;
         this.onClose = config.onClose || (() => { });
-        this.onSave = config.onSave || null; // Optional override
+        this.onSave = config.onSave || null;
 
-        // Data Caches
+
         this.planes = config.planes || [];
-        this.allUsers = []; // Will hold combined { id (user_uuid), name, role, email }
+        this.allUsers = [];
 
         this.modal = null;
         this.isOpen = false;
 
-        // Form Components
+
         this.pilotAutocomplete = null;
         this.instructorAutocomplete = null;
         this.student2Autocomplete = null;
@@ -164,33 +164,33 @@ export class EditBookingModal {
     }
 
     setupEventListeners() {
-        // Modal Controls
+
         const close = () => this.hide();
         this.modal.querySelector('#close-edit-modal').addEventListener('click', close);
         this.modal.querySelector('#btn-close-edit').addEventListener('click', close);
 
-        // Save
+
         this.modal.querySelector('#btn-save-edit').addEventListener('click', () => this.handleSave());
 
-        // Cancel Booking (Delete)
+
         this.modal.querySelector('#btn-cancel-booking-action').addEventListener('click', () => this.handleCancelBooking());
 
-        // Click Outside
+
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal) close();
         });
 
-        // ESC Key
+
         const escHandler = (e) => {
             if (e.key === 'Escape' && this.isOpen) close();
         };
         document.addEventListener('keydown', escHandler);
-        this.escHandler = escHandler; // Store for cleanup
+        this.escHandler = escHandler;
     }
 
-    // =========================================================================
-    // LOADING & INITIALIZATION
-    // =========================================================================
+
+
+
 
     updateLoading(percent, message) {
         const overlay = this.modal.querySelector('#edit-loading-overlay');
@@ -206,11 +206,11 @@ export class EditBookingModal {
     }
 
     async render() {
-        // FIX 1: Force remove any stuck Cancel Modals that might be blocking the screen
+
         const zombieModal = document.getElementById('booking-cancel-modal');
         if (zombieModal) zombieModal.remove();
 
-        // FIX 2: Resurrect DOM if destroyed
+
         let isFreshDOM = false;
         if (!this.modal) {
             this.createModal();
@@ -220,7 +220,7 @@ export class EditBookingModal {
         if (this.isOpen) return;
         this.isOpen = true;
 
-        // Animate In
+
         this.modal.classList.remove('hidden');
         requestAnimationFrame(() => {
             const content = this.modal.querySelector('.bg-gray-900');
@@ -231,7 +231,7 @@ export class EditBookingModal {
         });
 
         try {
-            // Initialize if fresh DOM or if data was lost
+
             if (isFreshDOM || !this.pilotAutocomplete) {
                 await this.initializeData();
             }
@@ -246,42 +246,42 @@ export class EditBookingModal {
         this.updateLoading(10, "Establishing connection...");
 
         try {
-            // 1. Always Fetch Fleet to ensure we have model names from 
-            // We removed the 'if (this.planes.length === 0)' check so we don't rely on incomplete parent data
+
+
             this.updateLoading(30, "Loading fleet data...");
             const { data: fleetData, error: fleetError } = await supabase
                 .schema('api')
-                .rpc('get_plane_fleet'); //
+                .rpc('get_plane_fleet');
 
             if (fleetError) throw fleetError;
             this.planes = fleetData || [];
 
-            // 2. Fetch All Users & Map them
-            // We need to join users + person tables effectively, or use existing views
-            // Since your SQL has a `, let's try to utilize the data we have
+
+
+
             this.updateLoading(50, "Fetching member directory...");
             await this.loadAndMapUsers();
 
-            // 3. Prepare Form
+
             this.updateLoading(80, "Configuring editor...");
 
-            // Initialize Pickers
+
             this.initializePickers();
 
-            // Initialize Autocompletes
+
             this.initializeAutocompletes();
 
-            // 4. Populate Data
+
             this.updateLoading(90, "Mapping booking details...");
             this.populateForm();
 
-            // 5. Reveal Form
-            await new Promise(r => setTimeout(r, 500)); // Smooth visual transition
-            this.modal.querySelector('#edit-loading-overlay').classList.add('hidden'); // Hide overlay
+
+            await new Promise(r => setTimeout(r, 500));
+            this.modal.querySelector('#edit-loading-overlay').classList.add('hidden');
             this.modal.querySelector('#edit-loading-overlay').classList.add('opacity-0');
             this.modal.querySelector('#edit-booking-form').classList.remove('opacity-0');
 
-            // CHANGE: Reveal the footer now that loading is complete
+
             const footer = this.modal.querySelector('#edit-modal-footer');
             if (footer) {
                 footer.classList.remove('hidden');
@@ -294,46 +294,46 @@ export class EditBookingModal {
     }
 
     async loadAndMapUsers() {
-        // In the new SQL, 'users' table links Auth ID to Person ID.
-        // We need a list that has: id (User UUID), name, role, email.
 
-        // Strategy: Fetch 'users' and join with '' via person_id
-        // Or simpler: Fetch  and find their User ID.
 
-        // 1. Get all Users (Auth/Role map)
+
+
+
+
+
         const { data: usersData, error: usersError } = await supabase
             .schema('api').rpc('get_users');
 
         if (usersError) throw usersError;
 
-        // 2. Get Person Details (Names)
-        // FIX: Use secure RPC instead of view
+
+
         const { data: membersData, error: membersError } = await supabase.schema('api').rpc('get_members');
 
         if (membersError) throw membersError;
 
-        // 3. Join them in JS
+
         this.allUsers = usersData.map(u => {
             const person = membersData.find(m => m.id === u.person_id);
             return {
-                id: u.id, // This is the USER UUID (needed for bookings table)
+                id: u.id,
                 person_id: u.person_id,
                 role: u.role,
                 name: person ? `${person.first_name} ${person.last_name}` : 'Unknown',
-                type: person ? person.type : u.role, // from view
-                email: person ? person.email : null // View doesn't have email in some versions, but tables do. 
-                // Use the user's email if view is missing it, 
-                // though users table doesn't usually store email in new schema (auth does).
-                // Assuming  might be updated or we use the name mostly.
+                type: person ? person.type : u.role,
+                email: person ? person.email : null
+
+
+
             };
-        }).filter(u => u.name !== 'Unknown'); // Filter out broken links
+        }).filter(u => u.name !== 'Unknown');
 
         console.log(`Mapped ${this.allUsers.length} users for autocomplete.`);
     }
 
-    // =========================================================================
-    // FORM SETUP
-    // =========================================================================
+
+
+
 
     initializePickers() {
         this.datePicker = new CustomDatePicker(this.modal.querySelector('#edit-date-input'));
@@ -342,18 +342,18 @@ export class EditBookingModal {
     }
 
     initializeAutocompletes() {
-        // Pilot (Can be Student, Regular Pilot, Instructor)
+
         this.pilotAutocomplete = new Autocomplete({
             inputElement: this.modal.querySelector('#edit-pilot-input'),
             dataSource: this.allUsers,
             allowedTypes: ['student', 'regular_pilot', 'instructor'],
             displayField: 'name',
-            valueField: 'id', // Storing User UUID
+            valueField: 'id',
             placeholder: 'Search pilot...',
             onSelect: (item) => console.log('Selected Pilot:', item)
         });
 
-        // Instructor (Strict)
+
         this.instructorAutocomplete = new Autocomplete({
             inputElement: this.modal.querySelector('#edit-instructor-input'),
             dataSource: this.allUsers,
@@ -363,7 +363,7 @@ export class EditBookingModal {
             placeholder: 'Search instructor...',
         });
 
-        // Students (Strict)
+
         this.student2Autocomplete = new Autocomplete({
             inputElement: this.modal.querySelector('#edit-student2-input'),
             dataSource: this.allUsers,
@@ -387,7 +387,7 @@ export class EditBookingModal {
         const b = this.booking;
         if (!b) return;
 
-        // 1. Plane
+
         const planeSelect = this.modal.querySelector('#edit-plane-select');
         planeSelect.innerHTML = '<option value="">Select Aircraft</option>';
         this.planes.forEach(p => {
@@ -398,11 +398,11 @@ export class EditBookingModal {
             planeSelect.appendChild(opt);
         });
 
-        // 2. Dates
+
         const start = new Date(b.start_time);
         const end = new Date(b.end_time);
 
-        // Helper to format HH:MM
+
         const timeStr = (d) => d.toTimeString().substring(0, 5);
         const dateStr = (d) => d.toISOString().split('T')[0];
 
@@ -415,15 +415,15 @@ export class EditBookingModal {
         if (this.endTimePicker.setValue) this.endTimePicker.setValue(timeStr(end));
         else this.modal.querySelector('#edit-end-time').value = timeStr(end);
 
-        // 3. Description
+
         this.modal.querySelector('#edit-description').value = b.description || '';
 
-        // 4. Booking Type & People
+
         const typeBanner = this.modal.querySelector('#booking-type-banner');
         const instSection = this.modal.querySelector('#edit-instructor-section');
         const studSection = this.modal.querySelector('#edit-students-section');
 
-        // Set Pilot (Common to both)
+
         this.setAutocompleteValue(this.pilotAutocomplete, b.pilot_id);
 
         if (b.booking_type === 'instruction') {
@@ -458,26 +458,26 @@ export class EditBookingModal {
         }
     }
 
-    // =========================================================================
-    // ACTIONS
-    // =========================================================================
+
+
+
 
     async handleSave() {
         const btn = this.modal.querySelector('#btn-save-edit');
         const spinner = this.modal.querySelector('#save-spinner');
 
         try {
-            // UI Loading State
+
             btn.disabled = true;
             btn.classList.add('opacity-75', 'cursor-not-allowed');
             spinner.classList.remove('hidden');
 
-            // 1. Validate
+
             const payload = this.getFormData();
             if (!payload) throw new Error("Validation failed");
 
-            // 2. Send Update via RPC
-            // FIX: Removed fallback to direct table update. Only RPC is allowed.
+
+
             const { error } = await supabase.schema('api').rpc('update_booking', {
                 booking_uuid: this.booking.id,
                 payload: payload
@@ -487,10 +487,10 @@ export class EditBookingModal {
 
             showToast('Booking updated successfully', 'success');
 
-            // 3. Callback & Cleanup
+
             if (this.onSave) this.onSave();
 
-            // Refresh Events
+
             window.dispatchEvent(new CustomEvent('refreshBookingsTable'));
             window.dispatchEvent(new CustomEvent('bookingUpdated', { detail: { id: this.booking.id } }));
 
@@ -534,7 +534,7 @@ export class EditBookingModal {
             start_time: new Date(startISO).toISOString(),
             end_time: new Date(endISO).toISOString(),
             description: description,
-            booking_type: this.booking.booking_type // Preserve type
+            booking_type: this.booking.booking_type
         };
 
         if (this.booking.booking_type === 'instruction') {
@@ -545,7 +545,7 @@ export class EditBookingModal {
             payload.student2_id = this.student2Autocomplete.selectedItem?.id || null;
             payload.student3_id = this.student3Autocomplete.selectedItem?.id || null;
         } else {
-            // Nullify instruction fields if switching types (though UI prevents type switch here)
+
             payload.instructor_id = null;
             payload.student2_id = null;
             payload.student3_id = null;
@@ -559,11 +559,11 @@ export class EditBookingModal {
         const cancelModal = new BookingCancelModal({
             booking: this.booking,
             onConfirm: async () => {
-                // The modal handles the API call
+
                 window.dispatchEvent(new CustomEvent('refreshBookingsTable'));
             },
             onCancel: () => {
-                // Re-open edit modal if they regret clicking cancel
+
                 this.render();
             }
         });
@@ -574,7 +574,7 @@ export class EditBookingModal {
         if (!this.modal) return;
         this.isOpen = false;
 
-        // Animate Out
+
         const content = this.modal.querySelector('.bg-gray-900');
         if (content) {
             content.classList.remove('scale-100', 'opacity-100');
@@ -592,7 +592,7 @@ export class EditBookingModal {
     destroy() {
         if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
 
-        // Cleanup components and NULL them out so render() knows to rebuild them
+
         if (this.pilotAutocomplete) {
             this.pilotAutocomplete.destroy();
             this.pilotAutocomplete = null;
@@ -610,7 +610,7 @@ export class EditBookingModal {
             this.student3Autocomplete = null;
         }
 
-        // Pickers usually don't have destroy methods, but we must null the reference
+
         this.datePicker = null;
         this.startTimePicker = null;
         this.endTimePicker = null;

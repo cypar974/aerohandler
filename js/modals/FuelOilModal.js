@@ -12,16 +12,16 @@ export class FuelOilModal {
         this.planeId = null;
         this.planeTailNumber = "";
 
-        // Data Cache
+
         this.logs = [];
 
-        // View State: 'list' or 'add'
+
         this.currentView = 'list';
 
-        // Picker Instance
+
         this.datePickerInstance = null;
 
-        // Bindings
+
         this.handleModalClick = this.handleModalClick.bind(this);
         this.handleEscapeKey = this.handleEscapeKey.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
@@ -42,7 +42,7 @@ export class FuelOilModal {
         this.render();
         this.isOpen = true;
 
-        // Animate Entry
+
         const modalContent = this.modal.querySelector('.bg-gray-900');
         setTimeout(() => {
             this.modal.classList.remove("hidden");
@@ -62,7 +62,7 @@ export class FuelOilModal {
     async fetchLogs() {
         this.setLoading(true);
         try {
-            // Assumes RPC 'get_fuel_logs_by_plane' exists
+
             const { data, error } = await supabase
                 .schema('api')
                 .rpc('get_fuel_logs_by_plane', { plane_uuid: this.planeId });
@@ -236,19 +236,19 @@ export class FuelOilModal {
         this.modal.addEventListener('click', this.handleModalClick);
         document.addEventListener('keydown', this.handleEscapeKey);
 
-        // Close
+
         document.getElementById('close-fuel-modal')?.addEventListener('click', () => this.close());
 
-        // Toggle View
+
         document.getElementById('toggle-fuel-view-btn')?.addEventListener('click', () => {
             this.toggleView(this.currentView === 'list' ? 'add' : 'list');
         });
 
-        // Form Submission
+
         document.getElementById('add-fuel-form')?.addEventListener('submit', this.handleSubmit);
         document.getElementById('cancel-fuel-btn')?.addEventListener('click', () => this.toggleView('list'));
 
-        // Type Change (Update Unit Label)
+
         const typeSelect = document.getElementById('fuel-type');
         const unitLabel = document.getElementById('fuel-unit-label');
         if (typeSelect && unitLabel) {
@@ -257,7 +257,7 @@ export class FuelOilModal {
             });
         }
 
-        // Custom Picker
+
         const dateInput = document.getElementById('fuel-date');
         if (dateInput) {
             dateInput.value = new Date().toISOString().split('T')[0];
@@ -302,7 +302,7 @@ export class FuelOilModal {
         const cost = document.getElementById('fuel-cost').value;
         const location = document.getElementById('fuel-location').value;
 
-        // Validation
+
         if (!amount || amount <= 0) {
             showToast("Please enter a valid amount", "error");
             return;
@@ -323,7 +323,7 @@ export class FuelOilModal {
                 added_by: user?.id
             };
 
-            // Assumes RPC 'insert_fuel_log' exists
+
             const { error } = await supabase
                 .schema('api')
                 .rpc('insert_fuel_log', { payload });

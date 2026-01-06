@@ -15,12 +15,12 @@ export class StudentModal {
         this.isEditMode = !!studentData;
         this.currentStudentId = studentData?.id || null;
 
-        // Create modal if it doesn't exist
+
         if (!this.modal) {
             this.createModal();
         }
 
-        // Populate data if editing
+
         if (studentData) {
             this.populateData(studentData);
         } else {
@@ -179,14 +179,14 @@ export class StudentModal {
             await this.saveStudent();
         });
 
-        // Click outside modal to close
+
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal) {
                 this.hide();
             }
         });
 
-        // Keyboard shortcuts
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !this.modal.classList.contains('hidden')) {
                 this.hide();
@@ -198,17 +198,17 @@ export class StudentModal {
         document.getElementById('student-modal-title').textContent = 'Edit Student';
         document.getElementById('submit-button-text').textContent = 'Update Student';
 
-        // Show edit mode fields
+
         document.getElementById('edit-mode-fields').classList.remove('hidden');
 
-        // Populate basic fields
+
         document.getElementById('student-first-name').value = studentData.first_name || '';
         document.getElementById('student-last-name').value = studentData.last_name || '';
         document.getElementById('student-email').value = studentData.email || '';
         document.getElementById('student-phone').value = studentData.phone || '';
         document.getElementById('license-number').value = studentData.license_number || '';
 
-        // Populate date of birth
+
         if (studentData.date_of_birth) {
             const [year, month, day] = studentData.date_of_birth.split('-');
             document.getElementById('dob-day').value = parseInt(day);
@@ -216,11 +216,11 @@ export class StudentModal {
             document.getElementById('dob-year').value = parseInt(year);
         }
 
-        // Populate edit mode fields
+
         document.getElementById('student-address').value = studentData.address || '';
         document.getElementById('emergency-contact').value = studentData.emergency_contact_name || '';
         document.getElementById('emergency-phone').value = studentData.emergency_contact_phone || '';
-        // Note: membership-status maps to SQL is_active implicitly, or is ignored if column missing
+
         document.getElementById('membership-status').value = studentData.membership_status || 'active';
         document.getElementById('license-type').value = studentData.license_type || '';
 
@@ -237,10 +237,10 @@ export class StudentModal {
         document.getElementById('submit-button-text').textContent = 'Save Student';
         document.getElementById('student-form').reset();
 
-        // Hide edit mode fields
+
         document.getElementById('edit-mode-fields').classList.add('hidden');
 
-        // Set default date to today for DOB fields (optional)
+
         const today = new Date();
         document.getElementById('dob-day').value = '';
         document.getElementById('dob-month').value = '';
@@ -261,7 +261,7 @@ export class StudentModal {
                 ${this.isEditMode ? 'Updating...' : 'Saving...'}
             `;
 
-            // Get basic info
+
             const firstName = document.getElementById("student-first-name").value.trim();
             const lastName = document.getElementById("student-last-name").value.trim();
             const email = document.getElementById("student-email").value.trim();
@@ -269,13 +269,13 @@ export class StudentModal {
             const month = document.getElementById("dob-month").value;
             const year = document.getElementById("dob-year").value;
 
-            // Validation
+
             if (!firstName || !lastName || !email) {
                 showToast("Please fill in all required fields", "error");
                 return;
             }
 
-            // Date validation
+
             const dob = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
             const dobDate = new Date(dob);
             if (isNaN(dobDate.getTime())) {
@@ -302,7 +302,7 @@ export class StudentModal {
     }
 
     async addStudent(firstName, lastName, email, dob, phone, license) {
-        // 1. Fetch the max student number (for auto-increment logic)
+
         const { data: allStudents, error: fetchError } = await supabase.schema('api').rpc('get_students');
 
         if (fetchError) throw fetchError;
@@ -318,7 +318,7 @@ export class StudentModal {
         }
         const calculatedStudentNumber = nextStudentNumber.toString().padStart(4, '0');
 
-        // 2. Prepare the Single Payload
+
         const payload = {
             first_name: firstName,
             last_name: lastName,
@@ -331,14 +331,14 @@ export class StudentModal {
             license_type: document.getElementById("license-type")?.value.trim()
         };
 
-        // 3. Call the Consolidated API Function
+
         const { data: newStudent, error: createError } = await supabase.schema('api').rpc('insert_student', {
             payload: payload
         });
 
         if (createError) throw createError;
 
-        // 4. 📧 SEND PASSWORD RESET EMAIL
+
         try {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: window.location.origin + '/update-password.html'
@@ -363,7 +363,7 @@ export class StudentModal {
     }
 
     async updateStudent(firstName, lastName, email, dob, phone, license) {
-        // Get additional fields for edit mode
+
         const address = document.getElementById("student-address")?.value.trim();
         const emergencyContact = document.getElementById("emergency-contact")?.value.trim();
         const emergencyPhone = document.getElementById("emergency-phone")?.value.trim();
@@ -372,7 +372,7 @@ export class StudentModal {
         const licenseExpiry = document.getElementById("license-expiry")?.value;
         const medicalExpiry = document.getElementById("medical-expiry")?.value;
 
-        // Prepare update data payload matching SQL columns
+
         const updateData = {
             first_name: firstName,
             last_name: lastName,
@@ -383,7 +383,7 @@ export class StudentModal {
             updated_at: new Date().toISOString()
         };
 
-        // Add optional fields if they exist
+
         if (address !== undefined) updateData.address = address;
         if (emergencyContact !== undefined) updateData.emergency_contact_name = emergencyContact;
         if (emergencyPhone !== undefined) updateData.emergency_contact_phone = emergencyPhone;
@@ -392,14 +392,14 @@ export class StudentModal {
         if (licenseExpiry) updateData.license_expiry = licenseExpiry;
         if (medicalExpiry) updateData.medical_expiry = medicalExpiry;
 
-        // Remove empty fields to avoid overwriting with empty values
+
         Object.keys(updateData).forEach(key => {
             if (updateData[key] === '' || updateData[key] === null) {
                 delete updateData[key];
             }
         });
 
-        // Use RPC to update
+
         const { error } = await supabase.schema('api').rpc('update_student', {
             student_uuid: this.currentStudentId,
             payload: updateData
@@ -410,7 +410,7 @@ export class StudentModal {
         this.hide();
         showToast("Student updated successfully!", "success");
 
-        // Callback for parent component
+
         if (this.onStudentSaved) {
             this.onStudentSaved();
         }

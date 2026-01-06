@@ -6,18 +6,18 @@ export class BookingCancelModal {
     constructor(config = {}) {
         console.log('🗑️ BookingCancelModal initialized');
 
-        // 1. Singleton Cleanup
+
         this.cleanupExistingModals();
 
-        // 2. Configuration
+
         this.booking = config.booking || null;
         this.onConfirm = config.onConfirm || null;
         this.onCancel = config.onCancel || null;
 
-        // 3. State
+
         this.modal = null;
         this.isLoading = false;
-        this.boundHandleEsc = this.handleEsc.bind(this); // Bind for removal later
+        this.boundHandleEsc = this.handleEsc.bind(this);
 
         this.render();
     }
@@ -27,14 +27,14 @@ export class BookingCancelModal {
         existing.forEach(el => el.remove());
     }
 
-    // --- VIEW LOGIC ---
+
 
     createModal() {
         this.modal = document.createElement('div');
         this.modal.id = 'booking-cancel-modal';
         this.modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4 backdrop-blur-sm transition-opacity duration-300 opacity-0';
 
-        // Extract display data safely
+
         const displayData = this.getDisplayData();
 
         this.modal.innerHTML = `
@@ -91,7 +91,7 @@ export class BookingCancelModal {
 
         document.body.appendChild(this.modal);
 
-        // Trigger Animations
+
         requestAnimationFrame(() => {
             this.modal.classList.remove('opacity-0');
             const content = this.modal.querySelector('.modal-content');
@@ -108,16 +108,16 @@ export class BookingCancelModal {
         const start = new Date(this.booking.start_time);
         const end = new Date(this.booking.end_time);
 
-        // Normalize Plane Data
-        // 1. Try 'plane_tail_number' (from View)
-        // 2. Try 'plane.tail_number' (from Nested Object in Details Modal)
-        // 3. Fallback to empty
+
+
+
+
         let plane = this.booking.plane_tail_number
             || this.booking.plane?.tail_number
             || this.booking.plane_tail
             || '';
 
-        // Normalize Pilot Data
+
         let pilot = this.booking.pilot_name
             || this.booking.pilot?.name
             || (this.booking.pilot ? `${this.booking.pilot.first_name} ${this.booking.pilot.last_name}` : '')
@@ -132,16 +132,16 @@ export class BookingCancelModal {
     }
 
     setupEventListeners() {
-        // Buttons
+
         this.modal.querySelector('#btn-confirm-cancel').addEventListener('click', () => this.handleConfirm());
         this.modal.querySelector('#btn-keep-booking').addEventListener('click', () => this.handleClose());
 
-        // Click Outside
+
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal && !this.isLoading) this.handleClose();
         });
 
-        // Esc Key
+
         document.addEventListener('keydown', this.boundHandleEsc);
     }
 
@@ -149,7 +149,7 @@ export class BookingCancelModal {
         if (e.key === 'Escape' && !this.isLoading) this.handleClose();
     }
 
-    // --- ACTIONS ---
+
 
     async handleConfirm() {
         if (this.isLoading) return;
@@ -157,7 +157,7 @@ export class BookingCancelModal {
         this.updateButtonState(true);
 
         try {
-            // CALL RPC
+
             const { error } = await supabase.schema('api').rpc('delete_booking', {
                 booking_uuid: this.booking.id
             });
@@ -166,10 +166,10 @@ export class BookingCancelModal {
 
             showToast('Booking cancelled successfully', 'success');
 
-            // Trigger Callbacks
+
             if (this.onConfirm) await this.onConfirm(this.booking);
 
-            // Global Event (for Calendar/Table refresh)
+
             window.dispatchEvent(new CustomEvent('refreshBookingsTable'));
             window.dispatchEvent(new CustomEvent('bookingDeleted', { detail: { id: this.booking.id } }));
 
@@ -185,7 +185,7 @@ export class BookingCancelModal {
 
     handleClose() {
         if (this.isLoading) return;
-        if (this.onCancel) this.onCancel(); // Allows parent (EditModal) to reopen if needed
+        if (this.onCancel) this.onCancel();
         this.destroy();
     }
 
@@ -224,11 +224,11 @@ export class BookingCancelModal {
         document.removeEventListener('keydown', this.boundHandleEsc);
 
         if (this.modal) {
-            // FIX: Immediately disable mouse interaction so the underlying modal is clickable 
-            // even while this one is fading out.
+
+
             this.modal.style.pointerEvents = 'none';
 
-            // Animate out
+
             this.modal.classList.add('opacity-0');
             const content = this.modal.querySelector('.modal-content');
             if (content) content.classList.add('scale-95', 'opacity-0');

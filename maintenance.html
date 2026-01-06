@@ -34,7 +34,7 @@
             letter-spacing: 0.05em;
         }
 
-        /* Animated grid background similar to login.html */
+
         .instrument-panel::before {
             content: '';
             position: absolute;
@@ -111,10 +111,10 @@
     </div>
 
     <script type="module">
-        // Import supabase client from the provided file
+
         import { supabase } from "./js/supabase.js";
 
-        const REFRESH_INTERVAL_MS = 60000; // 60 seconds
+        const REFRESH_INTERVAL_MS = 60000;
         const TARGET_URL = "./app.html";
 
         const messageElement = document.getElementById('maintenance-message');
@@ -125,7 +125,7 @@
          */
         async function checkMaintenanceStatus() {
             try {
-                // Fetch the single maintenance status row
+
                 const { data, error } = await supabase
                     .from('app_maintenance_status')
                     .select('is_maintenance_mode, display_message')
@@ -139,20 +139,20 @@
                 }
 
                 if (data && !data.is_maintenance_mode) {
-                    // Maintenance is OVER! Redirect to the application.
+
                     console.log("Maintenance complete. Redirecting to application.");
                     window.location.href = TARGET_URL;
-                    return; // Stop further execution
+                    return;
                 }
 
-                // If still in maintenance, update the display message
+
                 if (data && data.display_message) {
                     messageElement.textContent = data.display_message;
                 } else {
                     messageElement.textContent = 'The system is currently undergoing scheduled maintenance. Please try again later.';
                 }
 
-                // Restart the countdown and timer
+
                 startCountdownAndSetInterval();
 
             } catch (err) {
@@ -172,7 +172,7 @@
             countdownValue--;
             countdownElement.textContent = countdownValue;
             if (countdownValue <= 0) {
-                // Countdown reached zero, stop the display timer and let the interval handle the check
+
                 clearInterval(countdownTimer);
             }
         }
@@ -181,25 +181,25 @@
          * Sets the interval for checking status and starts the countdown display.
          */
         function startCountdownAndSetInterval() {
-            // Reset countdown value and display
+
             countdownValue = REFRESH_INTERVAL_MS / 1000;
             countdownElement.textContent = countdownValue;
 
-            // Clear any existing display timer
+
             if (countdownTimer) {
                 clearInterval(countdownTimer);
             }
 
-            // Start new display timer (updates every second)
+
             countdownTimer = setInterval(updateCountdown, 1000);
         }
 
-        // 1. Initial Check on load
+
         checkMaintenanceStatus();
 
-        // 2. Set the recurring interval check (60 seconds)
-        // Note: The countdown timer is separate from the interval, but the checkMaintenanceStatus()
-        // will restart both if maintenance is still active.
+
+
+
         setInterval(checkMaintenanceStatus, REFRESH_INTERVAL_MS);
 
     </script>

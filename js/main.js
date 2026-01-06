@@ -46,13 +46,13 @@ const cleanupFunctions = {
     '#maintenance': cleanupMaintenancePage,
     '#staff': cleanupStaffPage,
     '#memberdetails': cleanupMemberDetailsPage,
-    // Add other page cleanup functions as needed
+
 };
 
 async function cleanupCurrentPage() {
     console.log('🧹 Cleaning up current page:', currentPage);
 
-    // Call page-specific cleanup if it exists
+
     if (currentCleanup && typeof currentCleanup === 'function') {
         try {
             await currentCleanup();
@@ -63,9 +63,9 @@ async function cleanupCurrentPage() {
         currentCleanup = null;
     }
 
-    // Also call route-specific cleanup
+
     try {
-        // Handle student detail routes (any route starting with #student/)
+
         if (currentPage && currentPage.startsWith('#student/')) {
             const routeCleanup = cleanupFunctions['#studentdetails'];
             if (routeCleanup && typeof routeCleanup === 'function') {
@@ -73,7 +73,7 @@ async function cleanupCurrentPage() {
                 console.log('✅ Student details cleanup completed');
             }
         }
-        // Handle instructor detail routes (any route starting with #instructor/)
+
         else if (currentPage && currentPage.startsWith('#instructor/')) {
             const routeCleanup = cleanupFunctions['#instructordetails'];
             if (routeCleanup && typeof routeCleanup === 'function') {
@@ -81,7 +81,7 @@ async function cleanupCurrentPage() {
                 console.log('✅ Instructor details cleanup completed');
             }
         } else {
-            // Handle regular routes
+
             const routeCleanup = cleanupFunctions[currentPage];
             if (routeCleanup && typeof routeCleanup === 'function') {
                 await routeCleanup();
@@ -92,7 +92,7 @@ async function cleanupCurrentPage() {
         console.error('❌ Error during route-specific cleanup:', error);
     }
 
-    // Clear main content
+
     const mainContent = document.getElementById("main-content");
     if (mainContent) {
         mainContent.innerHTML = '';
@@ -103,17 +103,17 @@ async function cleanupCurrentPage() {
 }
 
 function initializeCustomPickers() {
-    // Initialize for all date inputs
+
     document.querySelectorAll('input[type="date"]').forEach(input => {
-        // Check if CustomDatePicker is available
+
         if (typeof CustomDatePicker !== 'undefined') {
             new CustomDatePicker(input);
         }
     });
 
-    // Initialize for all time inputs
+
     document.querySelectorAll('input[type="time"]').forEach(input => {
-        // Check if CustomTimePicker is available
+
         if (typeof CustomTimePicker !== 'undefined') {
             new CustomTimePicker(input);
         }
@@ -126,12 +126,12 @@ function setupMenuEventListeners() {
         menuItem.addEventListener('click', function (e) {
             const targetHash = this.getAttribute('href');
 
-            // If clicking the same page, force reload
+
             if (window.location.hash === targetHash) {
                 e.preventDefault();
                 console.log('🔄 Force reloading current page:', targetHash);
 
-                // Set force reload flag and trigger navigation
+
                 window.forceReload = true;
                 window.location.hash = targetHash;
             }
@@ -145,7 +145,7 @@ window.addEventListener('navigate', async (event) => {
     console.log('🧭 Programmatic navigation to:', page);
     const backPage = event.detail.backPage || null;
 
-    // Clean up current page before loading new one
+
     await cleanupCurrentPage();
 
     try {
@@ -154,17 +154,17 @@ window.addEventListener('navigate', async (event) => {
                 window.history.pushState({}, '', '#students');
                 await loadStudentsPage();
                 currentPage = '#students';
-                currentCleanup = null; // Students page doesn't have cleanup yet
+                currentCleanup = null;
                 break;
             case 'studentdetails':
-                // REFACTOR: Check for studentId (UUID) first, fallback to studentNumber
+
                 const studentId = event.detail.studentId || event.detail.studentNumber;
-                // [Change] Capture backPage from event
+
                 const studentBackPage = event.detail.backPage;
 
                 if (studentId) {
                     window.history.pushState({}, '', `#student/${studentId}`);
-                    // [Change] Pass backPage as second argument
+
                     await loadStudentDetailsPage(studentId, studentBackPage);
                     currentPage = `#student/${studentId}`;
                     currentCleanup = () => cleanupStudentDetailsPage();
@@ -174,17 +174,17 @@ window.addEventListener('navigate', async (event) => {
                 window.history.pushState({}, '', '#instructors');
                 await loadInstructorsPage();
                 currentPage = '#instructors';
-                currentCleanup = null; // Instructors page doesn't have cleanup yet
+                currentCleanup = null;
                 break;
             case 'instructordetails':
-                // REFACTOR: Ensure we grab the ID safely (expects UUID now)
+
                 const instructorId = event.detail.instructorId;
 
-                // [REMOVE THIS LINE] const backPage = event.detail.backPage; <--- The error is here
+
 
                 if (instructorId) {
                     window.history.pushState({}, '', `#instructor/${instructorId}`);
-                    // Use the backPage variable already defined at the top of the event listener
+
                     await loadInstructorDetailsPage(instructorId, backPage);
                     currentPage = `#instructor/${instructorId}`;
                     currentCleanup = () => cleanupInstructorDetailsPage();
@@ -221,14 +221,14 @@ window.addEventListener('navigate', async (event) => {
                 currentCleanup = () => cleanupMaintenancePage();
                 break;
             case 'memberdetails':
-                // Handle the object structure sent from members.js
-                // FIX: Rename backPage to memberBackPage to avoid scope conflict
+
+
                 const { memberId, type, backPage: memberBackPage } = event.detail;
 
-                // Construct the URL hash
+
                 window.history.pushState({}, '', `#member/${type}/${memberId}`);
 
-                // Call the loader with the new variable name
+
                 await loadMemberDetailsPage({ memberId, type, backPage: memberBackPage });
 
                 currentPage = `#member/${type}/${memberId}`;
@@ -238,14 +238,14 @@ window.addEventListener('navigate', async (event) => {
                 window.history.pushState({}, '', `#${page}`);
                 await loadPage(`#${page}`);
                 currentPage = `#${page}`;
-                // Set cleanup function for known pages
+
                 currentCleanup = cleanupFunctions[`#${page}`] || null;
         }
 
         console.log('✅ Navigation completed to:', currentPage);
     } catch (error) {
         console.error('❌ Navigation error:', error);
-        // Fallback to dashboard on error
+
         await loadDashboardPage();
         currentPage = '#dashboard';
         currentCleanup = null;
@@ -258,16 +258,16 @@ async function loadPage(hash) {
         await pageLoader();
         console.log('✅ Page loaded:', hash);
 
-        // Set cleanup function for the loaded page
+
         currentCleanup = cleanupFunctions[hash] || null;
 
-        // Initialize custom pickers if available
+
         if (typeof CustomDatePicker !== 'undefined' || typeof CustomTimePicker !== 'undefined') {
             setTimeout(initializeCustomPickers, 100);
         }
     } catch (error) {
         console.error('❌ Error loading page:', hash, error);
-        // Fallback to dashboard on error
+
         await loadDashboardPage();
         currentPage = '#dashboard';
         currentCleanup = null;
@@ -277,13 +277,13 @@ async function loadPage(hash) {
 async function router() {
     let hash = window.location.hash;
 
-    // If no hash or empty hash, default to dashboard
+
     if (!hash || hash === '') {
         hash = '#dashboard';
         window.history.replaceState({}, '', hash);
     }
 
-    // Check if we're already on this page (unless force reload)
+
     if (hash === currentPage && !window.forceReload) {
         console.log('ℹ️ Already on page:', hash);
         return;
@@ -293,8 +293,8 @@ async function router() {
 
     await cleanupCurrentPage();
 
-    // Check for student detail routes
-    // Regex matches UUIDs as well (alphanumeric + hyphens)
+
+
     const studentMatch = hash.match(/^#student\/([A-Za-z0-9-]+)$/);
     if (studentMatch) {
         const studentId = studentMatch[1];
@@ -315,9 +315,9 @@ async function router() {
 
     const memberMatch = hash.match(/^#member\/([a-z_]+)\/([A-Za-z0-9-]+)$/);
     if (memberMatch) {
-        const [_, type, memberId] = memberMatch; // Destructure regex results
+        const [_, type, memberId] = memberMatch;
         try {
-            // Pass as positional arguments (or object if you prefer, but positional works with your updated function)
+
             await loadMemberDetailsPage({ memberId, type });
             currentPage = hash;
             currentCleanup = () => cleanupMemberDetailsPage();
@@ -332,7 +332,7 @@ async function router() {
         return;
     }
 
-    // Check for instructor detail routes
+
     const instructorMatch = hash.match(/^#instructor\/([A-Za-z0-9-]+)$/);
     if (instructorMatch) {
         const instructorId = instructorMatch[1];
@@ -351,7 +351,7 @@ async function router() {
         return;
     }
 
-    // Load regular pages
+
     try {
         await loadPage(hash);
         currentPage = hash;
@@ -390,10 +390,10 @@ window.addEventListener('beforeunload', async () => {
 document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 Application initializing...');
 
-    // Set up menu event listeners
+
     setupMenuEventListeners();
 
-    // Initial page load
+
     router().then(() => {
         console.log('✅ Application initialized successfully');
     }).catch(error => {

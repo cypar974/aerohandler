@@ -8,15 +8,15 @@ export class EditRateModal {
         this.modal = null;
         this.onRateSaved = null;
         this.currentRateId = null;
-        this.planesData = []; // Stores plane_models
-        this.modelAutocomplete = null; // Instance of the Autocomplete class
+        this.planesData = [];
+        this.modelAutocomplete = null;
     }
 
     show(rateData, onRateSaved = null) {
         this.onRateSaved = onRateSaved;
         this.currentRateId = rateData?.id || null;
 
-        // Create modal if it doesn't exist
+
         if (!this.modal) {
             this.createModal().then(() => {
                 if (rateData) {
@@ -25,7 +25,7 @@ export class EditRateModal {
                 this.modal.classList.remove('hidden');
             });
         } else {
-            // If modal exists, ensure data is fresh
+
             this.loadPlaneModels().then(() => {
                 if (this.modelAutocomplete) {
                     this.modelAutocomplete.updateData(this.planesData);
@@ -46,14 +46,14 @@ export class EditRateModal {
     }
 
     async createModal() {
-        // Load models first
+
         await this.loadPlaneModels();
 
         this.modal = document.createElement('div');
         this.modal.id = 'edit-rate-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
 
-        const canEdit = true; // Todo: Check permissions
+        const canEdit = true;
 
         this.modal.innerHTML = `
             <div class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -127,7 +127,7 @@ export class EditRateModal {
 
         document.body.appendChild(this.modal);
 
-        // Initialize the autocomplete logic
+
         this.setupAutocomplete();
         this.setupEventListeners();
     }
@@ -154,10 +154,10 @@ export class EditRateModal {
         this.modelAutocomplete = new Autocomplete({
             inputElement: inputElement,
             dataSource: this.planesData,
-            allowedTypes: null, // No type filtering needed for planes
-            displayField: 'model_name', // Match the database column for plane name
+            allowedTypes: null,
+            displayField: 'model_name',
             valueField: 'id',
-            additionalFields: [], // No extra fields like email needed here
+            additionalFields: [],
             placeholder: 'Search Aircraft Model...',
             onSelect: (selected) => {
                 if (hiddenElement) {
@@ -165,7 +165,7 @@ export class EditRateModal {
                 }
             },
             onInput: (query) => {
-                // Clear hidden ID if user clears the text
+
                 if (!query.trim() && hiddenElement) {
                     hiddenElement.value = "";
                 }
@@ -197,11 +197,11 @@ export class EditRateModal {
     populateData(rateData) {
         document.getElementById('edit-rate-id').value = rateData.id || '';
 
-        // 1. Set Hidden ID
+
         const modelId = rateData.model_id || '';
         document.getElementById('edit-rate-aircraft-model').value = modelId;
 
-        // 2. Set Visible Text (Find model name from ID)
+
         if (modelId && this.planesData.length > 0) {
             const selectedModel = this.planesData.find(p => p.id === modelId);
             if (selectedModel) {
@@ -230,18 +230,18 @@ export class EditRateModal {
         if (this.modal) {
             document.getElementById('edit-rate-form').reset();
             document.getElementById('edit-rate-name-container').classList.add('hidden');
-            // Clear hidden ID specifically
+
             document.getElementById('edit-rate-aircraft-model').value = '';
         }
     }
 
     async saveRate() {
         try {
-            // Updated to grab value from the Hidden Input
+
             const modelId = document.getElementById('edit-rate-aircraft-model').value;
 
             const payload = {
-                model_id: modelId || null, // Ensure null if empty
+                model_id: modelId || null,
                 rate_type: document.getElementById('edit-rate-type').value,
                 amount: parseFloat(document.getElementById('edit-rate-amount').value),
                 description: document.getElementById('edit-rate-description').value,
@@ -255,7 +255,7 @@ export class EditRateModal {
                 payload.rate_name = selectedText;
             }
 
-            // Validation: Ensure model is selected
+
             if (!payload.model_id) {
                 showToast('Please select a valid Aircraft Model from the list', 'error');
                 return;

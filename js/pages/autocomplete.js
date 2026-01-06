@@ -5,7 +5,7 @@ export class Autocomplete {
         this.config = {
             inputElement: null,
             dataSource: [],
-            // NEW: Array of allowed 'type' strings. If empty/null, all types are shown.
+
             allowedTypes: null,
             maxSuggestions: 10,
             displayField: 'name',
@@ -36,7 +36,7 @@ export class Autocomplete {
         this.applyStyles();
     }
 
-    // ... (createSuggestionsContainer and setupEventListeners remain the same) ...
+
 
     createSuggestionsContainer() {
         this.suggestionsContainer = document.createElement('ul');
@@ -100,15 +100,15 @@ export class Autocomplete {
         const lowercaseQuery = query.toLowerCase();
 
         return this.config.dataSource.filter(item => {
-            // 1. NEW: Check Allowed Types (Filtering Logic)
+
             if (this.config.allowedTypes && this.config.allowedTypes.length > 0) {
-                // If the item has a type, but it's not in our allowed list, skip it
+
                 if (item.type && !this.config.allowedTypes.includes(item.type)) {
                     return false;
                 }
             }
 
-            // 2. Standard Search Logic
+
             const displayValue = String(item[this.config.displayField] || '').toLowerCase();
             const matchesDisplay = displayValue.includes(lowercaseQuery);
 
@@ -121,7 +121,7 @@ export class Autocomplete {
         }).slice(0, this.config.maxSuggestions);
     }
 
-    // ... (Rest of the class methods remain exactly the same: displaySuggestions, createSuggestionItem, etc.) ...
+
 
     displaySuggestions(items) {
         if (items.length === 0) {
@@ -164,7 +164,7 @@ export class Autocomplete {
             if (item.first_name && item.last_name) return 'User';
             return '';
         }
-        // Strict mapping based on full_sql.sql Enums
+
         switch (item.type) {
             case 'student': return 'Student';
             case 'instructor': return 'Instructor';
@@ -253,7 +253,7 @@ export class Autocomplete {
 
     destroy() {
         this.suggestionsContainer.remove();
-        // Remove listeners handled by garbage collection usually, but good practice if needed
+
     }
 }
 
@@ -280,8 +280,8 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
         return null;
     }
 
-    // 1. Format Data for Autocomplete
-    // Ensures every item has { id, name, type } which the class expects
+
+
     const dataSource = peopleData.map(p => ({
         id: p.id,
         name: p.name || `${p.first_name} ${p.last_name}`,
@@ -291,12 +291,12 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
         type: p.type
     }));
 
-    // 2. Define Filter Logic (Maps simple strings to SQL Enum types)
+
     let allowedTypes = null;
 
     switch (roleFilter) {
         case 'pilots':
-            // Students, Regular Pilots, and Instructors can all fly planes
+
             allowedTypes = ['student', 'regular_pilot', 'instructor'];
             break;
         case 'instructors':
@@ -307,31 +307,31 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
             break;
         case 'all':
         default:
-            allowedTypes = null; // Show everyone (including guests/technicians)
+            allowedTypes = null;
             break;
     }
 
-    // 3. Create & Return Instance
+
     return new Autocomplete({
         inputElement: inputElement,
         dataSource: dataSource,
-        allowedTypes: allowedTypes, // Uses the feature we added previously
+        allowedTypes: allowedTypes,
         displayField: 'name',
         valueField: 'id',
         additionalFields: ['email'],
         placeholder: inputElement.placeholder || 'Start typing...',
         onSelect: (selected) => {
-            // Standard behavior: update hidden ID field
+
             if (hiddenElement) {
                 hiddenElement.value = selected.id;
             }
-            // Custom behavior: run extra callback if provided (e.g., updating captain name)
+
             if (onSelect) {
                 onSelect(selected);
             }
         },
         onInput: (query) => {
-            // Standard behavior: clear hidden ID if user clears text
+
             if (!query.trim() && hiddenElement) {
                 hiddenElement.value = "";
             }

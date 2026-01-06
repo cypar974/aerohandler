@@ -11,12 +11,12 @@ export class PaymentModal {
     show(paymentData = null, onPaymentRecorded = null) {
         this.onPaymentRecorded = onPaymentRecorded;
 
-        // Create modal if it doesn't exist
+
         if (!this.modal) {
             this.createModal();
         }
 
-        // Populate data if editing
+
         if (paymentData) {
             this.populateData(paymentData);
         } else {
@@ -33,7 +33,7 @@ export class PaymentModal {
     }
 
     createModal() {
-        // PRESERVED: Existing DOM structure and Tailwind classes
+
         this.modal = document.createElement('div');
         this.modal.id = 'payment-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
@@ -93,9 +93,9 @@ export class PaymentModal {
     }
 
     populateData(paymentData) {
-        // UI LOGIC PRESERVED: Mapping logic remains to ensure modal title displays correctly
-        // Note: paymentData.type might come in as 'receivable'/'payable' or 'transaction_direction'
-        // depending on the parent component.
+
+
+
         const type = paymentData.transaction_direction || paymentData.type;
 
         document.getElementById('payment-modal-title').textContent =
@@ -104,7 +104,7 @@ export class PaymentModal {
         document.getElementById('payment-id').value = paymentData.id || '';
         document.getElementById('payment-type').value = type || '';
         document.getElementById('payment-amount').value = paymentData.amount || '';
-        // If date exists use it, otherwise default to today
+
         document.getElementById('payment-date').value = paymentData.date ? paymentData.date.split('T')[0] : new Date().toISOString().split('T')[0];
         document.getElementById('payment-method').value = paymentData.method || '';
         document.getElementById('payment-reference').value = paymentData.reference || '';
@@ -119,8 +119,8 @@ export class PaymentModal {
 
     async recordPayment() {
         const paymentId = document.getElementById('payment-id').value;
-        // We no longer need paymentType to determine the table, as everything is in financial_transactions
-        // const paymentType = document.getElementById('payment-type').value; 
+
+
         const amount = document.getElementById('payment-amount').value;
         const paymentDate = document.getElementById('payment-date').value;
         const paymentMethod = document.getElementById('payment-method').value;
@@ -132,22 +132,22 @@ export class PaymentModal {
             return;
         }
 
-        // Validate payment method against allowed values
-        // Note: SQL Enum supports: 'cash', 'card', 'transfer', 'check', 'other'
+
+
         const allowedMethods = ['cash', 'transfer', 'check', 'other', 'card'];
         if (!allowedMethods.includes(paymentMethod)) {
             showToast('Invalid payment method selected', 'error');
             return;
         }
 
-        // --- REFACTOR: Use RPC instead of direct Table Update ---
 
-        // Construct Payload for api.update_financial_transaction
-        // We don't need to specify 'receivable' or 'payable' table names anymore.
+
+
+
         const payload = {
-            status: 'paid', // Explicitly setting status to paid
-            paid_at: new Date(paymentDate).toISOString(), // Use the user-selected date formatted for TIMESTAMPTZ
-            payment_method: paymentMethod, // Strict Enum Match
+            status: 'paid',
+            paid_at: new Date(paymentDate).toISOString(),
+            payment_method: paymentMethod,
             reference_number: reference,
             notes: notes
         };
@@ -165,7 +165,7 @@ export class PaymentModal {
         this.hide();
         document.getElementById('payment-form').reset();
 
-        // Callback for parent component
+
         if (this.onPaymentRecorded) {
             this.onPaymentRecorded();
         }

@@ -11,7 +11,7 @@ export class SettleDebtModal {
     }
 
     async init() {
-        // 1. Fetch people for the search dropdown
+
         const { data, error } = await supabase.schema('api').rpc('get_members');
         if (!error) {
             this.peopleData = (data || []).map(p => ({
@@ -114,11 +114,11 @@ export class SettleDebtModal {
     }
 
     attachEvents() {
-        // Close Modal
+
         this.modal.querySelector('#close-settle-modal').onclick = () => this.hide();
         this.modal.onclick = (e) => { if (e.target === this.modal) this.hide(); };
 
-        // Autocomplete
+
         setupPersonAutocomplete({
             inputId: 'settle-person-search',
             hiddenId: 'settle-person-id',
@@ -126,7 +126,7 @@ export class SettleDebtModal {
             onSelect: (person) => this.loadUserTransactions(person.id)
         });
 
-        // Select All
+
         document.getElementById('select-all-debts').onchange = (e) => {
             const checkboxes = document.querySelectorAll('.txn-checkbox');
             checkboxes.forEach(cb => {
@@ -136,7 +136,7 @@ export class SettleDebtModal {
             this.updateTotal();
         };
 
-        // Submit
+
         document.getElementById('btn-submit-settlement').onclick = () => this.submitPayment();
     }
 
@@ -152,7 +152,7 @@ export class SettleDebtModal {
         container.classList.remove('hidden');
         list.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Loading...</td></tr>';
 
-        // CALL API
+
         const { data, error } = await supabase.schema('api').rpc('get_transactions_by_person', { person_uuid: personId });
 
         if (error) {
@@ -160,7 +160,7 @@ export class SettleDebtModal {
             return;
         }
 
-        // Filter only pending receivables (Money user owes us)
+
         const pendingDebts = (data || []).filter(t => t.status === 'pending' && t.transaction_direction === 'receivable');
 
         list.innerHTML = '';
@@ -187,7 +187,7 @@ export class SettleDebtModal {
                     </td>
                 `;
 
-                // Row click toggles checkbox
+
                 row.onclick = (e) => {
                     if (e.target.type !== 'checkbox') {
                         const cb = row.querySelector('.txn-checkbox');
@@ -197,9 +197,9 @@ export class SettleDebtModal {
                     }
                 };
 
-                // Checkbox click
+
                 row.querySelector('.txn-checkbox').onclick = (e) => {
-                    e.stopPropagation(); // Prevent double trigger
+                    e.stopPropagation();
                     this.toggleTransaction(txn.id, txn.amount, e.target.checked);
                     this.updateTotal();
                 };
@@ -213,7 +213,7 @@ export class SettleDebtModal {
         if (isSelected) {
             this.selectedTransactions.add({ id, amount: parseFloat(amount) });
         } else {
-            // Remove by ID
+
             for (const item of this.selectedTransactions) {
                 if (item.id === id) this.selectedTransactions.delete(item);
             }
@@ -221,14 +221,14 @@ export class SettleDebtModal {
     }
 
     updateTotal() {
-        // START REPLACEMENT
+
         let totalCents = 0;
         this.selectedTransactions.forEach(t => {
-            // Multiply by 100 and round to handle loose floats, calculate in integer
+
             totalCents += Math.round(t.amount * 100);
         });
         const total = totalCents / 100;
-        // END REPLACEMENT
+
 
         document.getElementById('settle-total-display').textContent = `€${total.toFixed(2)}`;
         document.getElementById('btn-submit-settlement').disabled = total === 0;
@@ -261,7 +261,7 @@ export class SettleDebtModal {
 
             showToast(data.message, 'success');
             this.hide();
-            // Optional: trigger a refresh event on the main page if needed
+
             if (this.onSuccessCallback) this.onSuccessCallback();
 
         } catch (err) {
@@ -276,9 +276,9 @@ export class SettleDebtModal {
         this.onSuccessCallback = onSuccess;
         this.modal.classList.remove('hidden');
 
-        // Wait logic: If peopleData is empty, wait a moment (or re-fetch)
+
         if (this.peopleData.length === 0) {
-            // Simple retry logic or re-await the fetch
+
             const { data } = await supabase.schema('api').rpc('get_members');
             this.peopleData = (data || []).map(p => ({
                 ...p,
@@ -288,7 +288,7 @@ export class SettleDebtModal {
         }
 
         if (preSelectedPersonId) {
-            // Now we are sure peopleData is loaded
+
             const person = this.peopleData.find(p => p.id === preSelectedPersonId);
 
             if (person) {
@@ -306,7 +306,7 @@ export class SettleDebtModal {
 
     hide() {
         this.modal.classList.add('hidden');
-        // Reset form
+
         document.getElementById('settle-person-search').value = '';
         document.getElementById('settle-transactions-container').classList.add('hidden');
         this.selectedTransactions.clear();

@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AeroHandler | Loading...</title>
     <style>
-        /* Optional: Dark background to match your theme while loading */
         body {
             background-color: #0a1929;
             margin: 0;
@@ -19,16 +18,16 @@
         import { supabase } from "./js/supabase.js";
 
         (async () => {
-            // 1. Check if Supabase has a session stored in this browser
+
             const { data: { session } } = await supabase.auth.getSession();
 
             if (session) {
-                // ✅ User is ALREADY logged in (even in another tab)
-                // Send them straight to the cockpit
+
+
                 window.location.href = "app.html";
             } else {
-                // ❌ No session found
-                // Send them to the login page
+
+
                 window.location.href = "login.html";
             }
         })();

@@ -18,7 +18,7 @@ let modalCleanupTimeout = null;
 // Cache for autocomplete data
 let cachedStudents = [];
 
-let returnToPage = 'instructors'; // Default return page
+let returnToPage = 'instructors';
 
 // CHANGE: Add 'sourcePage' to the arguments list
 export async function loadInstructorDetailsPage(instructorId = null, sourcePage = 'instructors') {
@@ -27,7 +27,7 @@ export async function loadInstructorDetailsPage(instructorId = null, sourcePage 
     const instructorIdFromUrl = instructorMatch ? instructorMatch[1] : null;
     currentInstructorId = instructorId || instructorIdFromUrl;
 
-    // CHANGE: Now 'sourcePage' is defined and can be used here
+
     returnToPage = sourcePage || 'instructors';
 
     if (!currentInstructorId) {
@@ -57,7 +57,7 @@ export function setupInstructorDetailsNavigation() {
 async function renderInstructorProfile(instructorId) {
     showLoading(true);
 
-    const canEdit = true; // Demo permission flag
+    const canEdit = true;
 
     try {
         if (!flightDetailsModal) flightDetailsModal = new FlightDetailsModal();
@@ -73,26 +73,26 @@ async function renderInstructorProfile(instructorId) {
             console.warn("No User Account found for this Instructor. Logs may be empty.");
         }
 
-        // 2. Fetch all data in parallel
+
         const promises = [
-            // A. Instructor Profile (Uses Person ID)
+
             supabase.schema('api').rpc('get_instructor_by_id', { instructor_uuid: instructorId }).single(),
 
-            // B. Reference Data
+
             supabase.schema('api').rpc('get_students'),
             supabase.schema('api').rpc('get_planes'),
             supabase.schema('api').rpc('get_plane_models')
         ];
 
-        // Only fetch logs if we found a valid User ID
+
         if (userId) {
-            // C. Logs as Instructor
+
             promises.push(supabase.schema('api').rpc('get_flight_logs').eq('instructor_uuid', userId));
-            // D. Logs as Pilot (Personal flights)
+
             promises.push(supabase.schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId }));
-            // E. Bookings as Instructor
+
             promises.push(supabase.schema('api').rpc('get_bookings').eq('instructor_id', userId));
-            // F. Bookings as Pilot
+
             promises.push(supabase.schema('api').rpc('get_bookings').eq('pilot_id', userId));
         }
 
@@ -103,7 +103,7 @@ async function renderInstructorProfile(instructorId) {
         const allPlanes = results[2].data || [];
         const allModels = results[3].data || [];
 
-        // Extract conditional results
+
         let instructorLogs = [];
         let pilotLogs = [];
         let instructorBookings = [];
@@ -118,19 +118,19 @@ async function renderInstructorProfile(instructorId) {
 
         if (instructorResult.error) throw instructorResult.error;
 
-        // --- Data Merging & Processing ---
 
-        // 1. Merge Flight Logs (Handle duplicates if they are both pilot and instructor on same log - rare but possible)
-        // We add a 'role' property to distinguish them in the UI
+
+
+
         const mergedLogs = [
             ...instructorLogs.map(l => ({ ...l, _role: 'INSTRUCTOR' })),
             ...pilotLogs.map(l => ({ ...l, _role: 'PILOT' }))
         ].sort((a, b) => new Date(b.flight_date) - new Date(a.flight_date));
 
-        // Deduplicate by ID just in case
+
         const uniqueLogs = Array.from(new Map(mergedLogs.map(item => [item.id, item])).values());
 
-        // 2. Merge Bookings
+
         const startDate = new Date();
         const mergedBookings = [
             ...instructorBookings.map(b => ({ ...b, _role: 'INSTRUCTOR' })),
@@ -139,25 +139,25 @@ async function renderInstructorProfile(instructorId) {
             .filter(b => new Date(b.start_time) >= startDate)
             .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
-        // 3. Hydrate Data (Maps)
+
         const studentsMap = new Map(allStudents.map(s => [s.id, s]));
         const planesMap = new Map(allPlanes.map(p => [p.id, p]));
         const modelsMap = new Map(allModels.map(m => [m.id, m]));
 
-        cachedStudents = allStudents; // Cache for modals
+        cachedStudents = allStudents;
 
         const hydratedBookings = mergedBookings.map(b => {
             const plane = planesMap.get(b.plane_id);
             return {
                 ...b,
                 plane_details: plane ? { ...plane, model: modelsMap.get(plane.model_id)?.model_name } : null,
-                // If instructor, show student name. If pilot, show instructor name (not available easily here without extra fetch, so generic)
+
                 other_party: b._role === 'INSTRUCTOR' ? studentsMap.get(b.pilot_id) : null
             };
         });
 
-        // 4. "Recent Students" Logic 
-        // Only count students from logs where this user was acting as the INSTRUCTOR
+
+
         const studentsTaught = instructorLogs.map(log => studentsMap.get(log.pilot_uuid)).filter(Boolean);
 
         const recentStudents = studentsTaught
@@ -166,7 +166,7 @@ async function renderInstructorProfile(instructorId) {
             )
             .slice(0, 8);
 
-        // 5. Statistics
+
         const statistics = calculateMixedStatistics(uniqueLogs, instructorLogs, mergedBookings, recentStudents);
 
         renderProfileHTML(instructorResult.data, statistics, uniqueLogs, hydratedBookings, recentStudents, canEdit);
@@ -185,7 +185,7 @@ function calculateMixedStatistics(allLogs, instructorOnlyLogs, upcomingBookings,
     const totalFlights = allLogs.length;
     const totalHours = allLogs.reduce((sum, f) => sum + (parseFloat(f.flight_duration) || 0), 0);
 
-    // Instruction specific stats
+
     const instructionHours = instructorOnlyLogs.reduce((sum, f) => sum + (parseFloat(f.flight_duration) || 0), 0);
 
     const hoursByType = {
@@ -208,7 +208,7 @@ function calculateMixedStatistics(allLogs, instructorOnlyLogs, upcomingBookings,
 function renderProfileHTML(instructor, stats, flightLogs, upcomingBookings, recentStudents, canEdit) {
     const i = instructor;
 
-    document.getElementById('main-content').innerHTML = /* html */ `
+    document.getElementById('main-content').innerHTML = `
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <button id="back-button" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer group">
@@ -435,7 +435,7 @@ function setupInstructorDetailsEventListeners(instructorId, userId, allLogs) {
     if (viewAllBtn) {
         viewAllBtn.addEventListener('click', () => {
             showToast('Full flight history modal coming soon!', 'info');
-            // Future: Implement a modal that accepts the `allLogs` array we passed in
+
         });
     }
 }
@@ -447,12 +447,12 @@ async function handleQuickAction(action, instructorId, userId) {
         case 'add-flight':
             currentModal = new AddFlightLogModal();
             currentModal.init().then(() => {
-                // If they are an instructor, we default them as the Instructor in the log? 
-                // Or as the Pilot? Usually Add Log implies "I flew", so we pass userId as pilotId.
-                // But if they are logging a lesson, they might be the instructor.
-                // For now, let's pass them as pilotId and let them change it in the form if needed.
+
+
+
+
                 currentModal.show({
-                    pilotId: userId, // Auto-select them as pilot
+                    pilotId: userId,
                     peopleData: cachedStudents
                 });
                 currentModal.onSuccess(() => {
@@ -476,9 +476,9 @@ async function handleQuickAction(action, instructorId, userId) {
                 await settleDebtModal.init();
             }
 
-            // Show modal and pass the instructorId to pre-fill the search
+
             settleDebtModal.show(() => {
-                // Optional: Refresh profile after payment to update any stats
+
                 renderInstructorProfile(instructorId);
             }, instructorId);
             break;
@@ -494,21 +494,21 @@ async function updateInstructorHours(instructorId, userId) {
     try {
         if (!userId) throw new Error("User ID not found for this instructor");
 
-        // Calculate total from ALL logs (Pilot + Instructor) or just Pilot? 
-        // Usually "Total Hours" means total experience.
-        // We need to fetch ALL logs for this calculation if not already done, 
-        // but we can trust the 'get_flight_logs' + 'get_flight_logs_by_pilot' sum we did earlier
-        // However, for safety, let's just re-calculate based on what the DB says for 'pilot' logs
-        // because "Total Hours" in aviation usually implies time at controls (Pilot + Dual Received).
-        // Time strictly as Instructor (without touching controls) might be counted differently, 
-        // but typically an Instructor is PIC.
+
+
+
+
+
+
+
+
 
         const { data: pilotLogs, error } = await supabase
             .schema('api').rpc('get_flight_logs_by_pilot', { p_pilot_uuid: userId });
 
         if (error) throw error;
 
-        // Sum hours where they were the PILOT (PIC or Dual)
+
         const totalHours = pilotLogs.reduce((sum, flight) => sum + parseFloat(flight.flight_duration || 0), 0);
 
         const { error: updateError } = await supabase
@@ -537,9 +537,9 @@ function createAddBookingModal(instructorId) {
     modal.onClose(() => closeActiveModal());
     currentBookingModal = modal;
 
-    // Pass the instructor's person ID. The modal handles ID resolution internally usually, 
-    // or we can pass the resolved ID if the modal supports it. 
-    // Based on previous code, it expects personId.
+
+
+
     modal.show({ personId: instructorId, preloadedPeople: cachedStudents });
 }
 
@@ -568,7 +568,7 @@ export function cleanupInstructorDetailsPage() {
     currentInstructorId = null;
     cachedStudents = [];
 
-    // <--- ADD THIS --->
+
     if (settleDebtModal) {
         if (typeof settleDebtModal.hide === 'function') settleDebtModal.hide();
         settleDebtModal = null;

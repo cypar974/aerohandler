@@ -5,9 +5,9 @@ import { setupPersonAutocomplete } from "../components/autocomplete.js";
 import { getMembers } from "../utils/memberData.js";
 
 // --- STATE MANAGEMENT ---
-let staffList = [];       // Active admins (fe
-let availableRoles = [];  // Admin roles (fetched from admin_roles)
-let allMembers = [];      // Source for Autocomplete (fetch
+let staffList = [];
+let availableRoles = [];
+let allMembers = [];
 let activeModal = null;
 let currentFilter = 'all';
 let sortState = { column: 'admin_role_level', direction: 'desc' };
@@ -76,7 +76,7 @@ export async function loadStaffPage() {
 
 // --- DATA LAYER ---
 async function fetchData() {
-    // 1. Fetch data in parallel
+
     const [rolesRes, staffRes, membersRes] = await Promise.all([
         supabase.schema('api').rpc('get_assignable_roles'),
         supabase.schema('api').rpc('get_admin_staff'),
@@ -101,7 +101,7 @@ function renderInterface() {
 }
 
 function renderStats() {
-    // Filter counts based on specific Role Names defined in the database
+
     const superAdminCount = staffList.filter(s => s.admin_role_name === 'Super Admin').length;
     const opsManagerCount = staffList.filter(s => s.admin_role_name === 'Operations Manager').length;
     const staffCount = staffList.filter(s => s.admin_role_name === 'Staff').length;
@@ -161,14 +161,14 @@ function renderTable() {
         return item.admin_role_name === currentFilter;
     });
 
-    // Sort
+
     filtered.sort((a, b) => {
         let valA = a[sortState.column];
         let valB = b[sortState.column];
         if (typeof valA === 'string') valA = valA.toLowerCase();
         if (typeof valB === 'string') valB = valB.toLowerCase();
 
-        // Reverse direction logic handling
+
         if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
         return 0;
@@ -214,7 +214,7 @@ function renderTable() {
 }
 
 function attachEventListeners() {
-    // Rebind main Promote button to handle cleanup properly
+
     const btn = document.getElementById("promote-staff-btn");
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
@@ -255,7 +255,7 @@ async function openPromoteModal(existingStaff = null) {
 
     const isEdit = !!existingStaff;
 
-    // Create Options
+
     const roleOptions = availableRoles.map(r =>
         `<option value="${r.id}" ${existingStaff?.admin_role_id === r.id ? 'selected' : ''}>
             ${r.name} (Level ${r.clearance_level})
@@ -327,7 +327,7 @@ async function openPromoteModal(existingStaff = null) {
         </div>
     `;
 
-    // add the click outside to close
+
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
             if (activeModal) activeModal.remove();
@@ -335,7 +335,7 @@ async function openPromoteModal(existingStaff = null) {
         }
     });
 
-    // add escape key to close
+
     const escKeyListener = (e) => {
         if (e.key === "Escape") {
             if (activeModal) activeModal.remove();
@@ -350,26 +350,26 @@ async function openPromoteModal(existingStaff = null) {
     document.body.appendChild(modalOverlay);
     activeModal = modalOverlay;
 
-    // --- SETUP AUTOCOMPLETE (Promote Mode Only) ---
+
     if (!isEdit) {
         setupPersonAutocomplete({
             inputId: 'member-search',
             hiddenId: 'selected-person-id',
             peopleData: allMembers,
-            roleFilter: 'all', // Can promote anyone
+            roleFilter: 'all',
             onSelect: (item) => {
-                // Enable submit button when valid selection made
+
                 const btn = document.getElementById('btn-submit');
                 if (btn) btn.disabled = false;
 
-                // Update helper text to confirm selection
+
                 const helper = document.getElementById('helper-text');
                 if (helper) helper.innerHTML = `<span class="text-green-400">✓ Selected: ${item.name} (${item.type})</span>`;
             }
         });
     }
 
-    // --- HANDLERS ---
+
     const close = () => { if (activeModal) activeModal.remove(); activeModal = null; };
     modalOverlay.querySelector('#modal-close').onclick = close;
     modalOverlay.querySelector('#modal-cancel').onclick = close;
@@ -399,20 +399,20 @@ async function openPromoteModal(existingStaff = null) {
         const roleId = formData.get('admin_role_id');
         const btn = form.querySelector('button[type="submit"]');
 
-        // Basic Validation
+
         if (!personId) {
             showToast("Please select a member first", "warning");
             return;
         }
 
-        // Add Loading State
+
         const originalText = btn.innerHTML;
         btn.innerHTML = `<span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full inline-block mr-2"></span> Processing...`;
         btn.disabled = true;
 
         try {
             if (isEdit) {
-                // Modify existing
+
                 const { error } = await supabase.schema('api').rpc('modify_user_admin_role', {
                     target_user_id: existingStaff.auth_id,
                     old_role_id: existingStaff.admin_role_id,
@@ -421,8 +421,8 @@ async function openPromoteModal(existingStaff = null) {
                 if (error) throw error;
                 showToast("Role updated successfully", "success");
             } else {
-                // Promote New
-                // Logic: Person ID -> Auth ID lookup -> Assign Role
+
+
                 const { error } = await supabase.schema('api').rpc('promote_person_to_admin', {
                     target_person_id: personId,
                     target_role_id: roleId
@@ -435,7 +435,7 @@ async function openPromoteModal(existingStaff = null) {
         } catch (err) {
             console.error(err);
             showToast(err.message, "error");
-            // Reset button on error
+
             btn.innerHTML = originalText;
             btn.disabled = false;
         }

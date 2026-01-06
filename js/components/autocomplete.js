@@ -4,13 +4,13 @@ export class Autocomplete {
     constructor(config) {
         this.config = {
             inputElement: null,
-            dataSource: [], // Array of objects with at least { id, name }
-            // NEW: Array of allowed 'type' strings. If empty/null, all types are shown.
+            dataSource: [],
+
             allowedTypes: null,
             maxSuggestions: 10,
             displayField: 'name',
             valueField: 'id',
-            additionalFields: ['email'], // Fields to display in suggestions
+            additionalFields: ['email'],
             placeholder: 'Start typing...',
             noResultsText: 'No matches found',
             onSelect: null,
@@ -38,7 +38,7 @@ export class Autocomplete {
     }
 
     createSuggestionsContainer() {
-        // Logic Lock: Preserving exact styling and DOM structure
+
         this.suggestionsContainer = document.createElement('ul');
         this.suggestionsContainer.className = 'autocomplete-suggestions';
         this.suggestionsContainer.style.cssText = `
@@ -58,12 +58,12 @@ export class Autocomplete {
             backdrop-filter: blur(8px);
         `;
 
-        // Insert after input element
+
         this.inputElement.parentNode.insertBefore(this.suggestionsContainer, this.inputElement.nextSibling);
     }
 
     setupEventListeners() {
-        // Input events
+
         this.inputElement.addEventListener('input', (e) => {
             this.handleInput(e.target.value);
             this.config.onInput?.(e.target.value);
@@ -76,7 +76,7 @@ export class Autocomplete {
         });
 
         this.inputElement.addEventListener('blur', () => {
-            // Delay hiding to allow for item selection
+
             setTimeout(() => this.hideSuggestions(), 150);
         });
 
@@ -84,7 +84,7 @@ export class Autocomplete {
             this.handleKeydown(e);
         });
 
-        // Click outside to close
+
         document.addEventListener('click', (e) => {
             if (!this.inputElement.contains(e.target) && !this.suggestionsContainer.contains(e.target)) {
                 this.hideSuggestions();
@@ -110,20 +110,20 @@ export class Autocomplete {
         const lowercaseQuery = query.toLowerCase();
 
         return this.config.dataSource.filter(item => {
-            // 1. NEW: Check Allowed Types (Filtering Logic)
+
             if (this.config.allowedTypes && this.config.allowedTypes.length > 0) {
-                // If the item has a type, but it's not in our allowed list, skip it
+
                 if (item.type && !this.config.allowedTypes.includes(item.type)) {
                     return false;
                 }
             }
 
-            // 2. Standard Search Logic
-            // Search in display field
+
+
             const displayValue = String(item[this.config.displayField] || '').toLowerCase();
             const matchesDisplay = displayValue.includes(lowercaseQuery);
 
-            // Search in additional fields
+
             const matchesAdditional = this.config.additionalFields.some(field => {
                 const fieldValue = String(item[field] || '').toLowerCase();
                 return fieldValue.includes(lowercaseQuery);
@@ -171,14 +171,14 @@ export class Autocomplete {
     }
 
     getItemType(item) {
-        // CHANGED: Update mapping to strictly match '' column values from full_sql.sql
+
         if (!item.type) {
-            // Fallback for legacy data or manual objects
+
             if (item.first_name && item.last_name) return 'User';
             return '';
         }
 
-        // Map SQL Enum values to UI Labels
+
         switch (item.type) {
             case 'student': return 'Student';
             case 'instructor': return 'Instructor';
@@ -250,7 +250,7 @@ export class Autocomplete {
         this.inputElement.value = selected.value;
         this.hideSuggestions();
 
-        // Trigger callback
+
         this.config.onSelect?.(selected);
     }
 
@@ -265,13 +265,13 @@ export class Autocomplete {
     }
 
     applyStyles() {
-        // Ensure input has relative positioning for absolute positioning of suggestions
+
         if (getComputedStyle(this.inputElement.parentNode).position === 'static') {
             this.inputElement.parentNode.style.position = 'relative';
         }
     }
 
-    // Public methods
+
     updateData(newData) {
         this.config.dataSource = newData;
     }
@@ -288,8 +288,8 @@ export class Autocomplete {
 
     destroy() {
         this.suggestionsContainer.remove();
-        // Event listeners on input are not automatically removed, 
-        // but typically the input is removed with the modal, so memory leaks are minimal.
+
+
     }
 }
 
@@ -318,8 +318,8 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
         return null;
     }
 
-    // 1. Format Data for Autocomplete
-    // Ensures every item has { id, name, type } which the class expects
+
+
     const dataSource = peopleData.map(p => ({
         id: p.id,
         name: p.name || `${p.first_name} ${p.last_name}`,
@@ -329,13 +329,13 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
         type: p.type
     }));
 
-    // 2. Define Filter Logic (Maps simple strings to SQL Enum types)
+
     let allowedTypes = null;
 
     switch (roleFilter) {
         case 'pilots':
-            // Students, Regular Pilots, and Instructors can all fly planes
-            // Excludes Guests (other_person) and Technicians
+
+
             allowedTypes = ['student', 'regular_pilot', 'instructor'];
             break;
         case 'instructors':
@@ -349,31 +349,31 @@ export function setupPersonAutocomplete({ inputId, hiddenId, peopleData, roleFil
             break;
         case 'all':
         default:
-            allowedTypes = null; // Show everyone (including guests/technicians)
+            allowedTypes = null;
             break;
     }
 
-    // 3. Create & Return Instance
+
     return new Autocomplete({
         inputElement: inputElement,
         dataSource: dataSource,
-        allowedTypes: allowedTypes, // Uses the new internal filtering
+        allowedTypes: allowedTypes,
         displayField: 'name',
         valueField: 'id',
         additionalFields: ['email'],
         placeholder: inputElement.placeholder || 'Start typing...',
         onSelect: (selected) => {
-            // Standard behavior: update hidden ID field
+
             if (hiddenElement) {
                 hiddenElement.value = selected.id;
             }
-            // Custom behavior: run extra callback if provided (e.g., updating captain name)
+
             if (onSelect) {
                 onSelect(selected);
             }
         },
         onInput: (query) => {
-            // Standard behavior: clear hidden ID if user clears text
+
             if (!query.trim() && hiddenElement) {
                 hiddenElement.value = "";
             }

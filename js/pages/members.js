@@ -10,20 +10,20 @@ import { SettleDebtModal } from "../modals/SettleDebtModal.js";
 let membersData = [];
 let sortState = { column: "last_name", direction: "asc" };
 let searchState = { column: "last_name", query: "" };
-let filterRole = "all"; // all, student, instructor, regular_pilot, maintenance_technician, other_person
+let filterRole = "all";
 let currentPage = 1;
 const rowsPerPage = 10;
 let searchAutocomplete = null;
-let addMemberModal = null; // Store instance
+let addMemberModal = null;
 let settleDebtModal = null;
 let currentGenericMemberId = null;
 
 export async function loadMembersPage() {
-    // --- DEMO MODE: PERMISSIONS FLAG ---
-    const canManageMembers = true;
-    // -----------------------------------
 
-    document.getElementById("main-content").innerHTML = /*html*/ `
+    const canManageMembers = true;
+
+
+    document.getElementById("main-content").innerHTML = `
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-white mb-2">Member Directory</h1>
@@ -132,11 +132,11 @@ export async function loadMembersPage() {
 function setupEventListeners() {
     const searchBox = document.getElementById("search-box");
 
-    // Initialize the Modal
+
     addMemberModal = new AddMemberModal();
     addMemberModal.init();
 
-    // Refresh table on successful add
+
     addMemberModal.onSuccess(async () => {
         await fetchMembers();
     });
@@ -184,15 +184,15 @@ function setupEventListeners() {
 async function fetchMembers() {
     showLoading(true);
     try {
-        // We use the SQL View '' defined in full_sql.sql
-        // It returns: id, first_name, last_name, email, type
+
+
         const { data, error } = await getMembers();
 
         if (error) throw error;
 
         membersData = data.map(m => ({
             ...m,
-            name: `${m.first_name} ${m.last_name}` // Helper for sort/search
+            name: `${m.first_name} ${m.last_name}`
         }));
 
         if (searchAutocomplete) {
@@ -232,13 +232,13 @@ function showLoading(show) {
 
 function renderTable() {
     let filtered = membersData.filter(m => {
-        // 1. Filter by Search
+
         const searchStr = searchState.query;
         const matchesSearch = !searchStr ||
             m.name.toLowerCase().includes(searchStr) ||
             (m.email && m.email.toLowerCase().includes(searchStr));
 
-        // 2. Filter by Role Dropdown
+
         const matchesRole = filterRole === 'all' || m.type === filterRole;
 
         return matchesSearch && matchesRole;
@@ -256,12 +256,12 @@ function renderTable() {
         emptyState.classList.add("hidden");
     }
 
-    // Sort
+
     filtered.sort((a, b) => {
         let valA = a[sortState.column] || "";
         let valB = b[sortState.column] || "";
 
-        // Handle name composition for sorting if needed
+
         if (sortState.column === 'last_name') {
             valA = a.last_name + a.first_name;
             valB = b.last_name + b.first_name;
@@ -275,12 +275,12 @@ function renderTable() {
         return 0;
     });
 
-    // Pagination
+
     const totalPages = Math.ceil(filtered.length / rowsPerPage);
     const start = (currentPage - 1) * rowsPerPage;
     const pageData = filtered.slice(start, start + rowsPerPage);
 
-    // Render Rows
+
     tableBody.innerHTML = pageData.map(member => `
         <tr class="hover:bg-gray-750 transition-colors cursor-pointer group" data-id="${member.id}" data-type="${member.type}">
             <td class="p-4 border-b border-gray-700">
@@ -317,12 +317,12 @@ function renderTable() {
         </tr>
     `).join('');
 
-    // Attach click handlers for rows
+
     tableBody.querySelectorAll('tr').forEach(row => {
         row.addEventListener('click', () => {
             const id = row.getAttribute('data-id');
             const type = row.getAttribute('data-type');
-            const member = membersData.find(m => m.id === id); // Find specific obj to get potential extras
+            const member = membersData.find(m => m.id === id);
             if (member) routeToMember(member);
         });
     });
@@ -352,12 +352,12 @@ async function routeToMember(member) {
             }
         }));
     } else {
-        // CHANGED: Now routes to the new Member Details page instead of the generic modal
+
         window.dispatchEvent(new CustomEvent('navigate', {
             detail: {
-                page: 'memberdetails', // Ensure your Router handles this key
+                page: 'memberdetails',
                 memberId: member.id,
-                type: member.type,     // Pass the type so the details page knows which table to query
+                type: member.type,
                 backPage: 'members'
             }
         }));
@@ -371,7 +371,7 @@ function toggleSort(column) {
         sortState = { column, direction: "asc" };
     } else {
         if (sortState.direction === "asc") sortState.direction = "desc";
-        else if (sortState.direction === "desc") sortState.direction = "asc"; // Simplified sort toggle
+        else if (sortState.direction === "desc") sortState.direction = "asc";
     }
     renderTable();
 }
@@ -398,19 +398,19 @@ function renderPagination(totalPages) {
 
     let buttons = '';
 
-    // Prev
+
     buttons += `<button class="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50" ${currentPage === 1 ? 'disabled' : ''} onclick="document.dispatchEvent(new CustomEvent('page-change', {detail: ${currentPage - 1}}))">Prev</button>`;
 
-    // Page Status
+
     buttons += `<span class="px-4 py-1 text-gray-400 text-sm">Page ${currentPage} of ${totalPages}</span>`;
 
-    // Next
+
     buttons += `<button class="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50" ${currentPage === totalPages ? 'disabled' : ''} onclick="document.dispatchEvent(new CustomEvent('page-change', {detail: ${currentPage + 1}}))">Next</button>`;
 
     pagination.innerHTML = buttons;
 
-    // Attach local listeners for pagination buttons by using the global document event trick or direct closure
-    // For cleaner code in modules, we use direct binding:
+
+
     pagination.querySelectorAll('button').forEach(btn => {
         btn.onclick = (e) => {
             const txt = e.target.textContent;

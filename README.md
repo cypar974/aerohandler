@@ -100,4 +100,4 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 
 ---
 
-Credits: Cyprien [cyprien_github](https://github.com/cypar974)
+Credits: [Cyprien](https://github.com/cypar974)

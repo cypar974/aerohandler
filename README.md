@@ -1,4 +1,4 @@
-# AeroHandler - Flight Deck
+# AeroHandler - Flight Deck [Currently down for maintenance]
 - Website: [aerohandler.vercel.app](https://aerohandler.vercel.app)
 - Email: cyprienarmand@gmail.com
 - Psw: c
@@ -80,14 +80,7 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 - **Financials**: View/manage invoices, transaction history, billing rates; mark payments as paid
 - **Settings**: Global preferences, school config, billing, security, and appearance
 - **Security**: Managed via Supabase session and DB RLS; logout fully clears session
-
-## Customization & Extending
-
-- **Add Pages/Features**: Create new JS files in `js/pages/`, reference in route map in `main.js`
-- **Create or update modals** in `js/modals/`, call from page scripts for add/edit flows
-- **DB Schema**: Extend using `/sql/schema/*`, rerun against DB; maintain enums, indexes, triggers accordingly
-- **Settings**: Add new options to `js/pages/settings.js` and reference them in the UI and your `localStorage` handlers
-
+  
 ---
 
 ## Security & Backup Notes
@@ -107,13 +100,4 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 
 ---
 
-## Contributing & Support
-
-- **Issues**: Use Issue Tracking module or GitHub Issues for this project
-- **Requests/PRs**: Welcome—modular JS makes collaboration easy
-- **License**: Proprietary / internal or MIT/Apache 2.0 (edit this section to your terms)
-- **Help**: See `txt/help.txt` and `txt/SETUP.md` for advanced setup or troubleshooting
-
----
-
-**AeroClub Flight Management: Built for rigorous, safe, and efficient club and flight school operations.**
+Credits: Cyprien [cyprien_github](https://github.com/cypar974)

@@ -7,6 +7,18 @@
 
 AeroClub (AeroHandler) is an integrated web application aimed at managing all aspects of a flight school or aero club. Built for handling flight operations, the platform supports student, instructor, aircraft, bookings, and financial management, all through a responsive, intuitive UI.
 
+### The admin dashboard
+![admin_dashboard](./previews/admin_dashboard.JPG)
+
+### Plane details menu
+![plane_details](./previews/plane_details.JPG)
+
+### Student profile view
+![student_profile](./previews/student_profile.JPG)
+
+### Submit flight log
+![submit_flight_log](./previews/submit_flight_log.JPG)
+
 ---
 
 ## Features
@@ -87,7 +99,7 @@ With numerous enums for roles, statuses, categories (see SQL for full range).
 
 ---
 
-## 🔒 Security Note: Database Schema
+## Security Note: Database Schema
 
 **Important:** For security reasons and to prevent the accidental exposure of sensitive configuration data, the `/sql/` directory referenced in this documentation is a skeleton of the real SQL file.
 
